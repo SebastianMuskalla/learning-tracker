@@ -202,11 +202,11 @@ describe('delete', () => {
     expect(board.discarded).toHaveLength(0);
   });
 
-  it('rejects deleting a non-Discarded item', () => {
-    const board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+  it('permanently removes an item that was never discarded', () => {
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
     const id = first(board.new).id;
-    const result = applyCommand(board, { type: 'delete', id });
-    expect(result).toEqual({ ok: false, error: { type: 'WrongStatus', id, expected: 'discarded' } });
+    board = run(board, { type: 'delete', id });
+    expect(board.new).toHaveLength(0);
   });
 });
 

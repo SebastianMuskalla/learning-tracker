@@ -14,7 +14,26 @@
   --complete: #2d5f8a;
   --discarded: #8a8578;
 
+  --new-tint: #3a6ea5;
+  --wip-tint: #c9a227;
+  --complete-tint: #3a6b52;
+  --discarded-tint: #a4392f;
+
+  --drawer-width: min(100vw, 40rem);
+
   color-scheme: light dark;
+}
+
+@media (min-width: 1300px) {
+  :root {
+    --drawer-width: min(100vw, 48rem);
+  }
+}
+
+@media (min-width: 1700px) {
+  :root {
+    --drawer-width: min(100vw, 88rem);
+  }
 }
 
 @media (prefers-color-scheme: dark) {

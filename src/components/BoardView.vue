@@ -9,6 +9,7 @@ import ConflictBanner from './ConflictBanner.vue';
 import ItemDetailDrawer from './ItemDetailDrawer.vue';
 import ParseErrorBanner from './ParseErrorBanner.vue';
 import SectionColumn from './SectionColumn.vue';
+import SyncStatusOverlay from './SyncStatusOverlay.vue';
 import TopBar from './TopBar.vue';
 
 const emit = defineEmits<{ openSettings: [reason?: string] }>();
@@ -22,9 +23,6 @@ const selectedItem = computed(() => (selectedId.value === null ? null : findItem
 
 const fileUrl = computed(
   () => `https://github.com/${settings.owner}/${settings.repo}/blob/${settings.branch}/${settings.path}`,
-);
-const historyUrl = computed(
-  () => `https://github.com/${settings.owner}/${settings.repo}/commits/${settings.branch}/${settings.path}`,
 );
 
 onMounted(() => {
@@ -96,6 +94,11 @@ function onRestore(id: ItemId): void {
   void boardStore.applyAndSync({ type: 'restore', id });
 }
 
+function onDelete(id: ItemId): void {
+  selectedId.value = null;
+  void boardStore.applyAndSync({ type: 'delete', id });
+}
+
 function onEditHeadline(id: ItemId, headline: string): void {
   const result = makeHeadline(headline);
   if (!result.ok) return;
@@ -110,19 +113,8 @@ function onSetDescription(id: ItemId, text: string): void {
 </script>
 
 <template>
-  <div class="board">
-    <TopBar
-      ref="topBar"
-      :owner="settings.owner"
-      :repo="settings.repo"
-      :sync-status="boardStore.syncStatus"
-      :error-message="boardStore.errorMessage"
-      :file-url="fileUrl"
-      :history-url="historyUrl"
-      @add="onAdd"
-      @refresh="boardStore.load()"
-      @open-settings="emit('openSettings')"
-    />
+  <div class="board" :class="{ shifted: selectedItem }">
+    <TopBar ref="topBar" @add="onAdd" @open-settings="emit('openSettings')" />
 
     <ParseErrorBanner
       v-if="boardStore.parseError"
@@ -137,36 +129,29 @@ function onSetDescription(id: ItemId, text: string): void {
     </div>
 
     <main v-else class="columns">
-      <div class="active-group">
-        <SectionColumn
-          title="New"
-          section="new"
-          :items="boardStore.board.new"
-          @reorder="(f: number, t: number) => onReorder('new', f, t)"
-          @select="onSelect"
-          @complete="onComplete"
-          @discard="onDiscard"
-          @edit-headline="onEditHeadline"
-        />
-        <SectionColumn
-          title="WIP"
-          section="wip"
-          :items="boardStore.board.wip"
-          @reorder="(f: number, t: number) => onReorder('wip', f, t)"
-          @select="onSelect"
-          @complete="onComplete"
-          @discard="onDiscard"
-          @edit-headline="onEditHeadline"
-        />
-      </div>
+      <SectionColumn
+        title="New"
+        section="new"
+        :items="boardStore.board.new"
+        @reorder="(f: number, t: number) => onReorder('new', f, t)"
+        @select="onSelect"
+        @edit-headline="onEditHeadline"
+      />
+      <SectionColumn
+        title="WIP"
+        section="wip"
+        :items="boardStore.board.wip"
+        @reorder="(f: number, t: number) => onReorder('wip', f, t)"
+        @select="onSelect"
+        @complete="onComplete"
+        @edit-headline="onEditHeadline"
+      />
       <SectionColumn
         title="Complete"
         section="complete"
         :items="boardStore.board.complete"
         @reorder="(f: number, t: number) => onReorder('complete', f, t)"
         @select="onSelect"
-        @uncomplete="onUncomplete"
-        @discard="onDiscard"
         @edit-headline="onEditHeadline"
       />
       <SectionColumn
@@ -175,7 +160,6 @@ function onSetDescription(id: ItemId, text: string): void {
         :items="boardStore.board.discarded"
         @reorder="(f: number, t: number) => onReorder('discarded', f, t)"
         @select="onSelect"
-        @restore="onRestore"
         @edit-headline="onEditHeadline"
       />
     </main>
@@ -190,6 +174,7 @@ function onSetDescription(id: ItemId, text: string): void {
       @uncomplete="onUncomplete(selectedItem!.id)"
       @discard="onDiscard(selectedItem!.id)"
       @restore="onRestore(selectedItem!.id)"
+      @delete="onDelete(selectedItem!.id)"
     />
 
     <ConflictBanner
@@ -199,6 +184,8 @@ function onSetDescription(id: ItemId, text: string): void {
       @keep-mine="boardStore.resolveConflict('keepMine')"
       @keep-theirs="boardStore.resolveConflict('keepTheirs')"
     />
+
+    <SyncStatusOverlay :sync-status="boardStore.syncStatus" :error-message="boardStore.errorMessage" />
   </div>
 </template>
 
@@ -207,6 +194,13 @@ function onSetDescription(id: ItemId, text: string): void {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  transition: margin-right 0.2s ease;
+}
+
+@media (min-width: 1300px) {
+  .board.shifted {
+    margin-right: var(--drawer-width);
+  }
 }
 
 .notice {
@@ -230,26 +224,8 @@ function onSetDescription(id: ItemId, text: string): void {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
-  max-width: 80rem;
+  max-width: 48rem;
   margin: 0 auto;
   width: 100%;
-}
-
-.active-group {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
-}
-
-@media (min-width: 720px) {
-  .active-group {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (min-width: 1000px) {
-  .columns {
-    grid-template-columns: 2fr 1fr;
-  }
 }
 </style>

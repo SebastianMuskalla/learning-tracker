@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { getFile } from '../github/client';
 import { useSettingsStore } from '../store/settings';
 import type { TokenStorageMode } from '../store/settings';
@@ -8,6 +8,28 @@ const { reason = null } = defineProps<{ readonly reason?: string | null }>();
 const emit = defineEmits<{ done: [] }>();
 
 const settings = useSettingsStore();
+
+const closable = computed(() => settings.isReady && !settings.needsPassphrase);
+
+const fileUrl = computed(
+  () => `https://github.com/${settings.owner}/${settings.repo}/blob/${settings.branch}/${settings.path}`,
+);
+const historyUrl = computed(
+  () => `https://github.com/${settings.owner}/${settings.repo}/commits/${settings.branch}/${settings.path}`,
+);
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && closable.value) {
+    emit('done');
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', onKeydown);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown);
+});
 
 const owner = ref(settings.owner);
 const repo = ref(settings.repo);
@@ -127,11 +149,19 @@ function describeError(type: string): string {
       </template>
 
       <template v-else>
-        <h1>Learning Tracker setup</h1>
+        <div class="header-row">
+          <h1>Learning Tracker setup</h1>
+          <button v-if="closable" class="close" title="Close (Esc)" @click="emit('done')">✕</button>
+        </div>
         <p class="hint">
           Data lives in a private repository, reached through a fine-grained personal access token
           scoped to that repository's Contents (read/write) only.
         </p>
+
+        <div v-if="closable" class="repo-links">
+          <a :href="fileUrl" target="_blank" rel="noopener noreferrer">View learning.md on GitHub</a>
+          <a :href="historyUrl" target="_blank" rel="noopener noreferrer">View file history</a>
+        </div>
 
         <label>
           Owner
@@ -205,6 +235,39 @@ function describeError(type: string): string {
 h1 {
   margin-top: 0;
   font-size: 1.3rem;
+}
+
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.header-row h1 {
+  flex: 1;
+}
+
+.close {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 2em;
+  height: 2em;
+  flex-shrink: 0;
+  color: var(--text);
+}
+
+.repo-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.repo-links a {
+  color: var(--accent);
 }
 
 .hint {

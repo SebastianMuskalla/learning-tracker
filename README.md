@@ -229,3 +229,9 @@ Your last good version is always in the repository's git history.
   read and write access to one file, in one private repository. They get
   nothing else. Use the narrow permissions from Step 2. Choose the storage
   mode from Step 4 that best fits the device you use.
+
+## Future ideas
+
+- Search functionality
+- Tags
+- Syntax highlighting for languages

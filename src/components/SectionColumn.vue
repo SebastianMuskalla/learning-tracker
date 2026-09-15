@@ -4,7 +4,7 @@ import { ref, watch } from 'vue';
 import type { Item, ItemId, Section } from '../domain/types';
 import ItemCard from './ItemCard.vue';
 
-const { title, section, items } = defineProps<{
+const { items } = defineProps<{
   readonly title: string;
   readonly section: Section;
   readonly items: readonly Item[];
@@ -14,9 +14,6 @@ const emit = defineEmits<{
   reorder: [fromIndex: number, toIndex: number];
   select: [id: ItemId];
   complete: [id: ItemId];
-  uncomplete: [id: ItemId];
-  discard: [id: ItemId];
-  restore: [id: ItemId];
   editHeadline: [id: ItemId, headline: string];
 }>();
 
@@ -35,27 +32,16 @@ function onUpdate(event: DraggableEvent<Item>): void {
     emit('reorder', from, to);
   }
 }
-
-const collapsed = ref(section === 'complete' || section === 'discarded');
 </script>
 
 <template>
-  <section class="column" :class="{ collapsed }">
-    <button class="column-header" @click="collapsed = !collapsed">
-      <span class="chevron" :class="{ collapsed }">▾</span>
+  <section class="column" :class="section">
+    <div class="column-header">
       <h2>{{ title }}</h2>
       <span class="count">{{ items.length }}</span>
-    </button>
+    </div>
 
-    <VueDraggable
-      v-if="!collapsed"
-      v-model="localItems"
-      tag="ul"
-      class="list"
-      handle=".handle"
-      :animation="150"
-      @update="onUpdate"
-    >
+    <VueDraggable v-model="localItems" tag="ul" class="list" handle=".handle" :animation="150" @update="onUpdate">
       <ItemCard
         v-for="item in localItems"
         :key="item.id"
@@ -63,9 +49,6 @@ const collapsed = ref(section === 'complete' || section === 'discarded');
         :section="section"
         @select="emit('select', item.id)"
         @complete="emit('complete', item.id)"
-        @uncomplete="emit('uncomplete', item.id)"
-        @discard="emit('discard', item.id)"
-        @restore="emit('restore', item.id)"
         @edit-headline="(headline: string) => emit('editHeadline', item.id, headline)"
       />
     </VueDraggable>
@@ -81,31 +64,34 @@ const collapsed = ref(section === 'complete' || section === 'discarded');
   min-width: 0;
 }
 
+.column.new {
+  background: color-mix(in srgb, var(--new-tint) 14%, var(--surface-alt));
+}
+
+.column.wip {
+  background: color-mix(in srgb, var(--wip-tint) 16%, var(--surface-alt));
+}
+
+.column.complete {
+  background: color-mix(in srgb, var(--complete-tint) 16%, var(--surface-alt));
+}
+
+.column.discarded {
+  background: color-mix(in srgb, var(--discarded-tint) 14%, var(--surface-alt));
+}
+
 .column-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   width: 100%;
-  background: transparent;
-  border: none;
   padding: 0.2rem 0;
-  text-align: left;
-  color: var(--text);
 }
 
 .column-header h2 {
   font-size: 0.95rem;
   margin: 0;
   flex: 1;
-}
-
-.chevron {
-  transition: transform 0.15s ease;
-  color: var(--text-muted);
-}
-
-.chevron.collapsed {
-  transform: rotate(-90deg);
 }
 
 .count {

@@ -288,9 +288,6 @@ function applyReorder(
 function applyDelete(board: Board, id: ItemId): Result<Board, DomainError> {
   const located = locate(board, id);
   if (!located) return err({ type: 'ItemNotFound', id });
-  if (located.section !== 'discarded') {
-    return err({ type: 'WrongStatus', id, expected: 'discarded' });
-  }
   return ok(removeAt(board, located));
 }
 
