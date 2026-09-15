@@ -30,6 +30,7 @@ export const useBoardStore = defineStore('board', () => {
   const warnings = ref<readonly ParseWarning[]>([]);
   const fileNotFound = ref(false);
   const unauthorized = ref(false);
+  const conflict = ref<{ readonly local: Board; readonly remote: Board; readonly message: string } | null>(null);
 
   const canWrite = computed(() => parseError.value === null);
 
@@ -111,6 +112,10 @@ export const useBoardStore = defineStore('board', () => {
       return Promise.resolve();
     }
     board.value = applied.value;
+
+    if (!settings.debounceReorder) {
+      return enqueue(() => flushReorder(command.section));
+    }
 
     if (pendingReorderTimer !== null) clearTimeout(pendingReorderTimer);
     pendingReorderTimer = setTimeout(() => {
@@ -210,10 +215,26 @@ export const useBoardStore = defineStore('board', () => {
     sha.value = fresh.value.sha;
     if (retryResult.error.type === 'Conflict') {
       syncStatus.value = 'conflict';
-      errorMessage.value = 'Someone else changed learning.md at the same time. Refresh and retry your change.';
+      errorMessage.value = 'Someone else changed learning.md at the same time. Choose which version to keep.';
+      conflict.value = { local: intendedBoard, remote: freshParsed.value.board, message };
       return;
     }
     applyClientError(retryResult.error);
+  }
+
+  /** Resolves a double-conflict by discarding one side. `sha` already holds the remote's current sha. */
+  async function resolveConflict(choice: 'keepMine' | 'keepTheirs'): Promise<void> {
+    const current = conflict.value;
+    if (!current) return;
+    conflict.value = null;
+
+    if (choice === 'keepTheirs') {
+      board.value = current.remote;
+      syncStatus.value = 'saved';
+      return;
+    }
+
+    await enqueue(() => writeBoard(current.local, current.message, current.remote));
   }
 
   function applyClientError(error: GithubClientError): void {
@@ -286,10 +307,12 @@ export const useBoardStore = defineStore('board', () => {
     warnings,
     fileNotFound,
     unauthorized,
+    conflict,
     canWrite,
     load,
     initializeEmptyFile,
     applyAndSync,
+    resolveConflict,
     validate,
   };
 });

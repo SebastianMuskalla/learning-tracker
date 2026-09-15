@@ -4,6 +4,7 @@ import { getFile } from '../github/client';
 import { useSettingsStore } from '../store/settings';
 import type { TokenStorageMode } from '../store/settings';
 
+const { reason = null } = defineProps<{ readonly reason?: string | null }>();
 const emit = defineEmits<{ done: [] }>();
 
 const settings = useSettingsStore();
@@ -14,6 +15,7 @@ const branch = ref(settings.branch || 'main');
 const path = ref(settings.path || 'learning.md');
 const token = ref('');
 const storageMode = ref<TokenStorageMode>(settings.tokenStorageMode);
+const debounceReorder = ref(settings.debounceReorder);
 const passphrase = ref('');
 const unlockPassphrase = ref('');
 
@@ -63,6 +65,7 @@ async function save(): Promise<void> {
     branch: branch.value.trim() || 'main',
     path: path.value.trim() || 'learning.md',
   });
+  settings.setDebounceReorder(debounceReorder.value);
 
   if (token.value.trim() !== '') {
     try {
@@ -107,6 +110,8 @@ function describeError(type: string): string {
 <template>
   <div class="setup">
     <div class="card">
+      <p v-if="reason" class="reason">{{ reason }}</p>
+
       <template v-if="showUnlock">
         <h1>Unlock</h1>
         <p class="hint">Enter the passphrase used to encrypt your token on this device.</p>
@@ -165,6 +170,10 @@ function describeError(type: string): string {
           Passphrase
           <input v-model="passphrase" type="password" autocomplete="off" />
         </label>
+        <label class="checkbox">
+          <input v-model="debounceReorder" type="checkbox" />
+          Batch rapid drag-and-drop reorders into one commit (recommended)
+        </label>
 
         <div class="actions">
           <button class="ghost" :disabled="testState === 'testing'" @click="testConnection">Test connection</button>
@@ -216,6 +225,25 @@ label input,
 label select {
   color: var(--text);
   font-size: 0.95rem;
+}
+
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+label.checkbox input {
+  width: auto;
+}
+
+.reason {
+  background: color-mix(in srgb, var(--warning) 15%, var(--surface));
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  margin-top: 0;
 }
 
 .actions {

@@ -5,12 +5,13 @@ import { findItemById } from '../domain/types';
 import type { ItemId, Section } from '../domain/types';
 import { useBoardStore } from '../store/board';
 import { useSettingsStore } from '../store/settings';
+import ConflictBanner from './ConflictBanner.vue';
 import ItemDetailDrawer from './ItemDetailDrawer.vue';
 import ParseErrorBanner from './ParseErrorBanner.vue';
 import SectionColumn from './SectionColumn.vue';
 import TopBar from './TopBar.vue';
 
-const emit = defineEmits<{ openSettings: [] }>();
+const emit = defineEmits<{ openSettings: [reason?: string] }>();
 
 const settings = useSettingsStore();
 const boardStore = useBoardStore();
@@ -21,6 +22,9 @@ const selectedItem = computed(() => (selectedId.value === null ? null : findItem
 
 const fileUrl = computed(
   () => `https://github.com/${settings.owner}/${settings.repo}/blob/${settings.branch}/${settings.path}`,
+);
+const historyUrl = computed(
+  () => `https://github.com/${settings.owner}/${settings.repo}/commits/${settings.branch}/${settings.path}`,
 );
 
 onMounted(() => {
@@ -39,7 +43,7 @@ watch(
   (isUnauthorized) => {
     if (isUnauthorized) {
       boardStore.unauthorized = false;
-      emit('openSettings');
+      emit('openSettings', boardStore.errorMessage ?? undefined);
     }
   },
 );
@@ -113,6 +117,8 @@ function onSetDescription(id: ItemId, text: string): void {
       :repo="settings.repo"
       :sync-status="boardStore.syncStatus"
       :error-message="boardStore.errorMessage"
+      :file-url="fileUrl"
+      :history-url="historyUrl"
       @add="onAdd"
       @refresh="boardStore.load()"
       @open-settings="emit('openSettings')"
@@ -184,6 +190,14 @@ function onSetDescription(id: ItemId, text: string): void {
       @uncomplete="onUncomplete(selectedItem!.id)"
       @discard="onDiscard(selectedItem!.id)"
       @restore="onRestore(selectedItem!.id)"
+    />
+
+    <ConflictBanner
+      v-if="boardStore.conflict"
+      :local="boardStore.conflict.local"
+      :remote="boardStore.conflict.remote"
+      @keep-mine="boardStore.resolveConflict('keepMine')"
+      @keep-theirs="boardStore.resolveConflict('keepTheirs')"
     />
   </div>
 </template>

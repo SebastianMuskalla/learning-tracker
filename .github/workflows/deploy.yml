@@ -30,6 +30,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm build
+        env:
+          # Optional repo variable (Settings -> Secrets and variables -> Actions -> Variables).
+          # Only needed if the app repository isn't named "learning-tracker" — see README.md.
+          VITE_BASE: ${{ vars.VITE_BASE }}
 
       - uses: actions/configure-pages@v5
 

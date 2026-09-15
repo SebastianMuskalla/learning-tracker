@@ -61,3 +61,27 @@ describe('clearToken', () => {
     expect(localStorage.getItem('learning-tracker:token')).toBeNull();
   });
 });
+
+describe('debounceReorder', () => {
+  it('defaults to true and persists across store instances once changed', () => {
+    const first = useSettingsStore();
+    expect(first.debounceReorder).toBe(true);
+    first.setDebounceReorder(false);
+
+    setActivePinia(createPinia());
+    const second = useSettingsStore();
+    expect(second.debounceReorder).toBe(false);
+  });
+
+  it('defaults to true for a settings blob saved before this option existed', () => {
+    const first = useSettingsStore();
+    first.updateRepoSettings({ owner: 'me', repo: 'learning-data', branch: 'main', path: 'learning.md' });
+    const raw = JSON.parse(localStorage.getItem('learning-tracker:settings') ?? '{}') as Record<string, unknown>;
+    delete raw['debounceReorder'];
+    localStorage.setItem('learning-tracker:settings', JSON.stringify(raw));
+
+    setActivePinia(createPinia());
+    const second = useSettingsStore();
+    expect(second.debounceReorder).toBe(true);
+  });
+});

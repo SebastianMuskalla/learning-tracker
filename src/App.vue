@@ -6,6 +6,7 @@ import { useSettingsStore } from './store/settings';
 
 const settings = useSettingsStore();
 const showSetup = ref(!settings.isReady && !settings.needsPassphrase);
+const setupReason = ref<string | null>(null);
 
 watch(
   () => settings.isReady,
@@ -14,16 +15,18 @@ watch(
   },
 );
 
-function openSettings(): void {
+function openSettings(reason?: string): void {
+  setupReason.value = reason ?? null;
   showSetup.value = true;
 }
 
 function onSetupDone(): void {
+  setupReason.value = null;
   showSetup.value = false;
 }
 </script>
 
 <template>
-  <SetupView v-if="showSetup || settings.needsPassphrase" @done="onSetupDone" />
+  <SetupView v-if="showSetup || settings.needsPassphrase" :reason="setupReason" @done="onSetupDone" />
   <BoardView v-else @open-settings="openSettings" />
 </template>

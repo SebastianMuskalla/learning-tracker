@@ -3,11 +3,13 @@ import { ref } from 'vue';
 import { makeHeadline } from '../domain/factories';
 import type { SyncStatus } from '../store/board';
 
-const { owner, repo, syncStatus, errorMessage } = defineProps<{
+const { owner, repo, syncStatus, errorMessage, fileUrl, historyUrl } = defineProps<{
   readonly owner: string;
   readonly repo: string;
   readonly syncStatus: SyncStatus;
   readonly errorMessage: string | null;
+  readonly fileUrl: string;
+  readonly historyUrl: string;
 }>();
 
 const emit = defineEmits<{
@@ -66,6 +68,8 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
     </form>
 
     <div class="actions">
+      <a :href="fileUrl" target="_blank" rel="noopener noreferrer" title="Open learning.md on GitHub">📄</a>
+      <a :href="historyUrl" target="_blank" rel="noopener noreferrer" title="View file history on GitHub">🕐</a>
       <button title="Refresh" @click="emit('refresh')">⟳</button>
       <button title="Settings" @click="emit('openSettings')">⚙</button>
     </div>
@@ -130,11 +134,14 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
   gap: 0.4rem;
 }
 
-.actions button {
+.actions button,
+.actions a {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.3em 0.6em;
+  line-height: 1.2;
+  text-decoration: none;
 }
 
 .add-error,
