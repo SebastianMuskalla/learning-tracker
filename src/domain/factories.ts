@@ -1,6 +1,6 @@
 import { isValid as isValidUlid, monotonicFactory } from 'ulidx';
 import { err, ok, type Result } from './result';
-import type { Description, Headline, IsoDate, ItemId } from './types';
+import type { Description, Headline, IsoTimestamp, ItemId } from './types';
 
 export type ValidationError =
   | { readonly type: 'EmptyHeadline' }
@@ -8,11 +8,14 @@ export type ValidationError =
   | { readonly type: 'HeadlineContainsComment' }
   | { readonly type: 'EmptyDescription' }
   | { readonly type: 'DescriptionContainsEndMarker' }
-  | { readonly type: 'InvalidIsoDate'; readonly value: string }
+  | { readonly type: 'InvalidIsoTimestamp'; readonly value: string }
   | { readonly type: 'InvalidItemId'; readonly value: string };
 
 const DESC_END_MARKER = '<!-- /desc -->';
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Full UTC timestamp, as written by this app from here on: `2026-09-16T14:32:07Z`.
+const ISO_TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
+// Legacy date-only value, as written before timestamps were tracked: `2026-09-16`.
+const ISO_DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 const nextUlid = monotonicFactory();
 
@@ -74,20 +77,46 @@ function stripBlankEdges(text: string): string {
   return lines.slice(start, end + 1).join('\n');
 }
 
-export function makeIsoDate(raw: string): Result<IsoDate, ValidationError> {
-  if (!ISO_DATE_RE.test(raw)) {
-    return err({ type: 'InvalidIsoDate', value: raw });
+/**
+ * Accepts either a full UTC timestamp (`2026-09-16T14:32:07Z`, what the app writes from here on)
+ * or a legacy date-only value (`2026-09-16`, what older versions of the app wrote); both are
+ * kept as given rather than normalised, so a legacy value round-trips without fabricating a time.
+ */
+export function makeIsoTimestamp(raw: string): Result<IsoTimestamp, ValidationError> {
+  const fullMatch = ISO_TIMESTAMP_RE.exec(raw);
+  if (fullMatch) {
+    const [, y, mo, d, h, mi, s] = fullMatch.map(Number) as [
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+    ];
+    if (!isRealCalendarDate(y, mo, d) || h > 23 || mi > 59 || s > 59) {
+      return err({ type: 'InvalidIsoTimestamp', value: raw });
+    }
+    return ok(raw as IsoTimestamp);
   }
-  const [year, month, day] = raw.split('-').map(Number) as [number, number, number];
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const isRealDate =
-    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-  if (!isRealDate) {
-    return err({ type: 'InvalidIsoDate', value: raw });
+
+  const dateMatch = ISO_DATE_ONLY_RE.exec(raw);
+  if (dateMatch) {
+    const [, y, mo, d] = dateMatch.map(Number) as [number, number, number, number];
+    if (!isRealCalendarDate(y, mo, d)) {
+      return err({ type: 'InvalidIsoTimestamp', value: raw });
+    }
+    return ok(raw as IsoTimestamp);
   }
-  return ok(raw as IsoDate);
+
+  return err({ type: 'InvalidIsoTimestamp', value: raw });
 }
 
-export function today(): IsoDate {
-  return new Date().toISOString().slice(0, 10) as IsoDate;
+function isRealCalendarDate(year: number, month: number, day: number): boolean {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+export function nowTimestamp(): IsoTimestamp {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z') as IsoTimestamp;
 }

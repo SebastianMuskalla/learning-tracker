@@ -80,6 +80,13 @@ button {
   cursor: pointer;
 }
 
+/* Font Awesome sets line-height: 1 on icons, which is shorter than this app's default line-height
+ * (1.5). Left alone, an icon-only button sizes to a shorter content box than a sibling button that
+ * mixes an icon with text, so same-styled buttons end up different heights next to each other. */
+.fa-solid {
+  line-height: inherit;
+}
+
 input,
 textarea,
 select {

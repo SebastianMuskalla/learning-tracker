@@ -24,8 +24,8 @@ const SECTIONS: readonly { readonly key: Section; readonly title: string }[] = [
     <div class="dialog">
       <h2>Someone else saved learning.md first</h2>
       <p class="hint">
-        Your change and the version already on GitHub can't both be kept automatically. Compare
-        them below and pick one — the other is discarded.
+        Your change and the version already on GitHub can't both be kept automatically. Compare them below and
+        pick one — the other is discarded.
       </p>
 
       <div class="versions">
@@ -51,8 +51,12 @@ const SECTIONS: readonly { readonly key: Section; readonly title: string }[] = [
       </div>
 
       <div class="actions">
-        <button class="ghost" @click="$emit('keepTheirs')">Keep GitHub's version</button>
-        <button class="primary" @click="$emit('keepMine')">Keep my version</button>
+        <button class="ghost" @click="$emit('keepTheirs')">
+          <i class="fa-solid fa-cloud-arrow-down" aria-hidden="true"></i> Keep GitHub's version
+        </button>
+        <button class="primary" @click="$emit('keepMine')">
+          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Keep my version
+        </button>
       </div>
     </div>
   </div>
@@ -134,6 +138,12 @@ h2 {
   gap: 0.6rem;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
 }
 
 button.primary {

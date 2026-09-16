@@ -30,7 +30,9 @@ export const useBoardStore = defineStore('board', () => {
   const warnings = ref<readonly ParseWarning[]>([]);
   const fileNotFound = ref(false);
   const unauthorized = ref(false);
-  const conflict = ref<{ readonly local: Board; readonly remote: Board; readonly message: string } | null>(null);
+  const conflict = ref<{ readonly local: Board; readonly remote: Board; readonly message: string } | null>(
+    null,
+  );
 
   const canWrite = computed(() => parseError.value === null);
 
@@ -113,10 +115,6 @@ export const useBoardStore = defineStore('board', () => {
     }
     board.value = applied.value;
 
-    if (!settings.debounceReorder) {
-      return enqueue(() => flushReorder(command.section));
-    }
-
     if (pendingReorderTimer !== null) clearTimeout(pendingReorderTimer);
     pendingReorderTimer = setTimeout(() => {
       pendingReorderTimer = null;
@@ -158,7 +156,8 @@ export const useBoardStore = defineStore('board', () => {
     const roundTrip = parse(text);
     if (!roundTrip.ok || !boardsEqual(roundTrip.value.board, nextBoard)) {
       board.value = previousBoard;
-      errorMessage.value = 'Internal error: the change could not be safely written back. Nothing was committed.';
+      errorMessage.value =
+        'Internal error: the change could not be safely written back. Nothing was committed.';
       syncStatus.value = 'error';
       return;
     }
@@ -202,7 +201,9 @@ export const useBoardStore = defineStore('board', () => {
       return;
     }
 
-    const retryText = boardsEqual(freshParsed.value.board, previousBoard) ? firstAttemptText : serialize(intendedBoard);
+    const retryText = boardsEqual(freshParsed.value.board, previousBoard)
+      ? firstAttemptText
+      : serialize(intendedBoard);
     const retryResult = await putFile(config(), { text: retryText, sha: fresh.value.sha, message });
     if (retryResult.ok) {
       board.value = intendedBoard;

@@ -17,7 +17,6 @@ const ENCRYPTED_TOKEN_KEY = 'learning-tracker:token-encrypted';
 
 interface PersistedSettings extends RepoSettings {
   readonly tokenStorageMode: TokenStorageMode;
-  readonly debounceReorder?: boolean;
 }
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -26,8 +25,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const branch = ref('main');
   const path = ref('learning.md');
   const tokenStorageMode = ref<TokenStorageMode>('local');
-  /** Batch rapid drag-and-drop reorders into one commit ~1s after the last drop. */
-  const debounceReorder = ref(true);
   const token = ref<string | null>(null);
   /** True once we know a passphrase-encrypted token exists but hasn't been unlocked this session. */
   const needsPassphrase = ref(false);
@@ -45,7 +42,6 @@ export const useSettingsStore = defineStore('settings', () => {
         branch.value = parsed.branch;
         path.value = parsed.path;
         tokenStorageMode.value = parsed.tokenStorageMode;
-        debounceReorder.value = parsed.debounceReorder ?? true;
       } catch {
         // Corrupt settings blob: fall back to defaults, force the setup screen.
       }
@@ -67,14 +63,8 @@ export const useSettingsStore = defineStore('settings', () => {
       branch: branch.value,
       path: path.value,
       tokenStorageMode: tokenStorageMode.value,
-      debounceReorder: debounceReorder.value,
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(persisted));
-  }
-
-  function setDebounceReorder(value: boolean): void {
-    debounceReorder.value = value;
-    persistSettings();
   }
 
   async function setToken(newToken: string, mode: TokenStorageMode, passphrase?: string): Promise<void> {
@@ -137,13 +127,11 @@ export const useSettingsStore = defineStore('settings', () => {
     branch,
     path,
     tokenStorageMode,
-    debounceReorder,
     token,
     needsPassphrase,
     isRepoConfigured,
     isReady,
     updateRepoSettings,
-    setDebounceReorder,
     setToken,
     unlockWithPassphrase,
     clearToken,

@@ -1,7 +1,12 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { boardsEqual } from '../../src/domain/board';
-import { generateItemId, makeHeadline, makeIsoDate, makeOptionalDescription } from '../../src/domain/factories';
+import {
+  generateItemId,
+  makeHeadline,
+  makeIsoTimestamp,
+  makeOptionalDescription,
+} from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
 import type {
   ActiveItem,
@@ -10,20 +15,21 @@ import type {
   Description,
   DiscardedItem,
   Headline,
-  IsoDate,
+  IsoTimestamp,
 } from '../../src/domain/types';
 import { parse } from '../../src/format/parse';
 import { serialize } from '../../src/format/serialize';
 
-const DATES: readonly IsoDate[] = [
+// A mix of full timestamps and legacy date-only values, to exercise both formats.
+const TIMESTAMPS: readonly IsoTimestamp[] = [
   '2024-02-29',
-  '2025-01-01',
-  '2025-12-31',
+  '2025-01-01T00:00:00Z',
+  '2025-12-31T23:59:59Z',
   '2026-09-15',
-  '2026-06-30',
-].map((d) => unwrap(makeIsoDate(d)));
+  '2026-06-30T08:15:42Z',
+].map((d) => unwrap(makeIsoTimestamp(d)));
 
-const arbitraryDate: fc.Arbitrary<IsoDate> = fc.constantFrom(...DATES);
+const arbitraryDate: fc.Arbitrary<IsoTimestamp> = fc.constantFrom(...TIMESTAMPS);
 
 const arbitraryHeadline: fc.Arbitrary<Headline> = fc
   .string({ minLength: 1, maxLength: 40 })
@@ -57,20 +63,18 @@ const arbitraryNonEmptyDescription: fc.Arbitrary<Description> = arbitraryDescrip
   .map((text) => unwrap(makeOptionalDescription(text.trim().length === 0 ? `x\n${text}` : text)))
   .filter((value): value is Description => value !== null);
 
-const arbitraryOptionalDescription: fc.Arbitrary<Description | null> = arbitraryDescriptionText.map(
-  (text) => unwrap(makeOptionalDescription(text)),
+const arbitraryOptionalDescription: fc.Arbitrary<Description | null> = arbitraryDescriptionText.map((text) =>
+  unwrap(makeOptionalDescription(text)),
 );
 
 function arbitraryActiveItem(description: fc.Arbitrary<Description | null>): fc.Arbitrary<ActiveItem> {
-  return fc
-    .tuple(arbitraryHeadline, arbitraryDate, description)
-    .map(([headline, createdAt, desc]) => ({
-      id: generateItemId(),
-      headline,
-      createdAt,
-      status: 'active' as const,
-      description: desc,
-    }));
+  return fc.tuple(arbitraryHeadline, arbitraryDate, description).map(([headline, createdAt, desc]) => ({
+    id: generateItemId(),
+    headline,
+    createdAt,
+    status: 'active' as const,
+    description: desc,
+  }));
 }
 
 const arbitraryCompleteItem: fc.Arbitrary<CompleteItem> = fc
@@ -102,7 +106,12 @@ const arbitraryBoard: fc.Arbitrary<Board> = fc
     fc.array(arbitraryCompleteItem, { maxLength: 3 }),
     fc.array(arbitraryDiscardedItem, { maxLength: 3 }),
   )
-  .map(([newItems, wipItems, complete, discarded]) => ({ new: newItems, wip: wipItems, complete, discarded }));
+  .map(([newItems, wipItems, complete, discarded]) => ({
+    new: newItems,
+    wip: wipItems,
+    complete,
+    discarded,
+  }));
 
 describe('serialize/parse round trip', () => {
   it('parse(serialize(board)) deep-equals board, for evil boards including headings, fences, and unicode in descriptions', () => {

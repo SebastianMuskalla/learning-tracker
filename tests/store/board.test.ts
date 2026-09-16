@@ -226,19 +226,6 @@ describe('reorder debounce', () => {
     expect(putFile).toHaveBeenCalledTimes(1);
     expect(board.syncStatus).toBe('saved');
   });
-
-  it('commits immediately when debounceReorder is turned off in settings', async () => {
-    const { board, settings } = setup();
-    settings.setDebounceReorder(false);
-    getFile.mockResolvedValue({ ok: true, value: { text: serialize(boardWithTwoItems()), sha: 'sha-1' } });
-    await board.load();
-    putFile.mockResolvedValue({ ok: true, value: { sha: 'sha-2' } });
-
-    await board.applyAndSync({ type: 'reorder', section: 'new', fromIndex: 0, toIndex: 1 });
-
-    expect(putFile).toHaveBeenCalledTimes(1);
-    expect(board.syncStatus).toBe('saved');
-  });
 });
 
 function boardWithTwoItems(): Board {

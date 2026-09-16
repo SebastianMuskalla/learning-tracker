@@ -45,20 +45,20 @@ exactly. Do not grant more access than listed here.
 2. Click **Generate new token**.
 3. Fill in the form:
 
-   | Field | Value |
-   |---|---|
-   | Token name | Any name you like, e.g. `learning-tracker` |
-   | Expiration | The longest option GitHub offers (up to 1 year) |
-   | Resource owner | Your GitHub account (or the organization that owns the data repository) |
+   | Field             | Value                                                                           |
+   | ----------------- | ------------------------------------------------------------------------------- |
+   | Token name        | Any name you like, e.g. `learning-tracker`                                      |
+   | Expiration        | The longest option GitHub offers (up to 1 year)                                 |
+   | Resource owner    | Your GitHub account (or the organization that owns the data repository)         |
    | Repository access | **Only select repositories** → choose the data repository, e.g. `learning-data` |
 
 4. Open the **Permissions** section and set **Repository permissions**:
 
-   | Permission | Setting |
-   |---|---|
-   | Contents | **Read and write** |
-   | Metadata | Read-only (GitHub sets this on its own; you cannot change it) |
-   | Everything else (Actions, Administration, Issues, Pages, Pull requests, Secrets, Webhooks, and so on) | **No access** |
+   | Permission                                                                                            | Setting                                                       |
+   | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+   | Contents                                                                                              | **Read and write**                                            |
+   | Metadata                                                                                              | Read-only (GitHub sets this on its own; you cannot change it) |
+   | Everything else (Actions, Administration, Issues, Pages, Pull requests, Secrets, Webhooks, and so on) | **No access**                                                 |
 
 5. Leave **Account permissions** untouched. Every item there must stay at
    **No access**. The app never needs them.
@@ -124,10 +124,10 @@ The app now loads your topics and is ready to use.
 
 ### Token storage modes
 
-| Mode | Where the token is kept | Use it when |
-|---|---|---|
-| Remember on this device | Browser `localStorage` | You use a personal computer |
-| This session only | Browser `sessionStorage`; gone after you close the tab | You use a shared or work computer |
+| Mode                        | Where the token is kept                                                        | Use it when                                                   |
+| --------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| Remember on this device     | Browser `localStorage`                                                         | You use a personal computer                                   |
+| This session only           | Browser `sessionStorage`; gone after you close the tab                         | You use a shared or work computer                             |
 | Encrypted with a passphrase | `localStorage`, encrypted; you type a passphrase once per session to unlock it | You want the convenience of "remember," with extra protection |
 
 ## Development
@@ -171,7 +171,7 @@ item        := '### ' headline NL
                '<!-- ' meta (' ' meta)* ' -->' NL
                desc?
                blank*
-meta        := 'id:' ULID | 'created:' DATE | 'completed:' DATE | 'discarded:' DATE
+meta        := 'id:' ULID | 'created:' TIMESTAMP | 'completed:' TIMESTAMP | 'discarded:' TIMESTAMP
 desc        := '<!-- desc -->' NL rawline* '<!-- /desc -->' NL
 rawline     := any line that is not exactly '<!-- /desc -->'
 blank       := an empty line (outside desc blocks)
@@ -193,10 +193,14 @@ Rules for hand edits:
 - A topic's section (New or WIP) depends on whether it has a description.
   If you place a topic under the wrong one by hand, the app still loads it.
   It shows a warning and fixes the placement the next time it saves.
-- A topic under **Complete** must have both a `completed:` date and a
+- A topic under **Complete** must have both a `completed:` timestamp and a
   description. Without them, the app reports an error instead of guessing.
-- A topic cannot have both a `completed:` date and a `discarded:` date.
-  Two topics cannot share the same `id`. Both cases are errors.
+- A topic cannot have both a `completed:` timestamp and a `discarded:`
+  timestamp. Two topics cannot share the same `id`. Both cases are errors.
+- A `TIMESTAMP` is either the full UTC form the app writes,
+  `2026-09-16T14:32:07Z`, or a plain date, `2026-09-16`, for files written
+  before the app tracked time of day. The app reads both. It only writes
+  the full form.
 - The app always writes line endings as `\n`. It also accepts `\r\n` when
   it reads a file, and converts them.
 

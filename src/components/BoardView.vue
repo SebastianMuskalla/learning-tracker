@@ -19,7 +19,9 @@ const boardStore = useBoardStore();
 
 const topBar = ref<{ focusAddInput: () => void } | null>(null);
 const selectedId = ref<ItemId | null>(null);
-const selectedItem = computed(() => (selectedId.value === null ? null : findItemById(boardStore.board, selectedId.value) ?? null));
+const selectedItem = computed(() =>
+  selectedId.value === null ? null : (findItemById(boardStore.board, selectedId.value) ?? null),
+);
 
 const fileUrl = computed(
   () => `https://github.com/${settings.owner}/${settings.repo}/blob/${settings.branch}/${settings.path}`,
@@ -125,7 +127,9 @@ function onSetDescription(id: ItemId, text: string): void {
 
     <div v-if="boardStore.fileNotFound" class="notice">
       <p>learning.md was not found in {{ settings.owner }}/{{ settings.repo }}.</p>
-      <button @click="boardStore.initializeEmptyFile()">Create it</button>
+      <button @click="boardStore.initializeEmptyFile()">
+        <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i> Create it
+      </button>
     </div>
 
     <main v-else class="columns">
@@ -210,6 +214,9 @@ function onSetDescription(id: ItemId, text: string): void {
 }
 
 .notice button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
   margin-top: 0.6rem;
   background: var(--accent);
   color: var(--accent-contrast);

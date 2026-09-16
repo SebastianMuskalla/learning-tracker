@@ -62,26 +62,20 @@ describe('clearToken', () => {
   });
 });
 
-describe('debounceReorder', () => {
-  it('defaults to true and persists across store instances once changed', () => {
-    const first = useSettingsStore();
-    expect(first.debounceReorder).toBe(true);
-    first.setDebounceReorder(false);
-
-    setActivePinia(createPinia());
-    const second = useSettingsStore();
-    expect(second.debounceReorder).toBe(false);
-  });
-
-  it('defaults to true for a settings blob saved before this option existed', () => {
+describe('legacy settings blob', () => {
+  it('silently ignores a stale debounceReorder key instead of erroring', () => {
     const first = useSettingsStore();
     first.updateRepoSettings({ owner: 'me', repo: 'learning-data', branch: 'main', path: 'learning.md' });
-    const raw = JSON.parse(localStorage.getItem('learning-tracker:settings') ?? '{}') as Record<string, unknown>;
-    delete raw['debounceReorder'];
+    const raw = JSON.parse(localStorage.getItem('learning-tracker:settings') ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    raw['debounceReorder'] = false;
     localStorage.setItem('learning-tracker:settings', JSON.stringify(raw));
 
     setActivePinia(createPinia());
+    expect(() => useSettingsStore()).not.toThrow();
     const second = useSettingsStore();
-    expect(second.debounceReorder).toBe(true);
+    expect(second.owner).toBe('me');
   });
 });

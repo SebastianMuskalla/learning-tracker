@@ -37,7 +37,6 @@ const branch = ref(settings.branch || 'main');
 const path = ref(settings.path || 'learning.md');
 const token = ref('');
 const storageMode = ref<TokenStorageMode>(settings.tokenStorageMode);
-const debounceReorder = ref(settings.debounceReorder);
 const passphrase = ref('');
 const unlockPassphrase = ref('');
 
@@ -47,6 +46,14 @@ const saveError = ref('');
 const unlockError = ref('');
 
 const showUnlock = computed(() => settings.needsPassphrase);
+
+const repoFieldsFilled = computed(
+  () =>
+    owner.value.trim() !== '' &&
+    repo.value.trim() !== '' &&
+    branch.value.trim() !== '' &&
+    path.value.trim() !== '',
+);
 
 async function testConnection(): Promise<void> {
   testState.value = 'testing';
@@ -87,7 +94,6 @@ async function save(): Promise<void> {
     branch: branch.value.trim() || 'main',
     path: path.value.trim() || 'learning.md',
   });
-  settings.setDebounceReorder(debounceReorder.value);
 
   if (token.value.trim() !== '') {
     try {
@@ -143,19 +149,25 @@ function describeError(type: string): string {
         </label>
         <p v-if="unlockError" class="error">{{ unlockError }}</p>
         <div class="actions">
-          <button class="primary" @click="unlock">Unlock</button>
-          <button class="ghost" @click="useDifferentRepo">Use a different repository</button>
+          <button class="primary" @click="unlock">
+            <i class="fa-solid fa-unlock" aria-hidden="true"></i> Unlock
+          </button>
+          <button class="ghost" @click="useDifferentRepo">
+            <i class="fa-solid fa-right-left" aria-hidden="true"></i> Use a different repository
+          </button>
         </div>
       </template>
 
       <template v-else>
         <div class="header-row">
           <h1>Learning Tracker setup</h1>
-          <button v-if="closable" class="close" title="Close (Esc)" @click="emit('done')">✕</button>
+          <button v-if="closable" class="close" title="Close (Esc)" @click="emit('done')">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
         </div>
         <p class="hint">
-          Data lives in a private repository, reached through a fine-grained personal access token
-          scoped to that repository's Contents (read/write) only.
+          Data lives in a private repository, reached through a fine-grained personal access token scoped to
+          that repository's Contents (read/write) only.
         </p>
 
         <div v-if="closable" class="repo-links">
@@ -200,14 +212,18 @@ function describeError(type: string): string {
           Passphrase
           <input v-model="passphrase" type="password" autocomplete="off" />
         </label>
-        <label class="checkbox">
-          <input v-model="debounceReorder" type="checkbox" />
-          Batch rapid drag-and-drop reorders into one commit (recommended)
-        </label>
 
         <div class="actions">
-          <button class="ghost" :disabled="testState === 'testing'" @click="testConnection">Test connection</button>
-          <button class="primary" @click="save">Save &amp; continue</button>
+          <button
+            class="ghost"
+            :disabled="!repoFieldsFilled || testState === 'testing'"
+            @click="testConnection"
+          >
+            <i class="fa-solid fa-plug" aria-hidden="true"></i> Test connection
+          </button>
+          <button class="primary" :disabled="!repoFieldsFilled" @click="save">
+            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save &amp; continue
+          </button>
         </div>
         <p v-if="testMessage" :class="testState === 'error' ? 'error' : 'ok'">{{ testMessage }}</p>
         <p v-if="saveError" class="error">{{ saveError }}</p>
@@ -290,16 +306,6 @@ label select {
   font-size: 0.95rem;
 }
 
-label.checkbox {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-label.checkbox input {
-  width: auto;
-}
-
 .reason {
   background: color-mix(in srgb, var(--warning) 15%, var(--surface));
   border: 1px solid var(--warning);
@@ -316,6 +322,12 @@ label.checkbox input {
   margin-top: 1rem;
 }
 
+.actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
 button.primary {
   background: var(--accent);
   color: var(--accent-contrast);
@@ -330,6 +342,11 @@ button.ghost {
   border-radius: 6px;
   padding: 0.5em 1em;
   color: var(--text);
+}
+
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .error {

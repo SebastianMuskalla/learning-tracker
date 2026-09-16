@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { emptyBoard, validateBoard } from '../../src/domain/board';
 import { applyCommand, type Command } from '../../src/domain/commands';
-import { generateItemId, makeHeadline, makeIsoDate, makeOptionalDescription } from '../../src/domain/factories';
+import {
+  generateItemId,
+  makeHeadline,
+  makeIsoTimestamp,
+  makeOptionalDescription,
+} from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
 import type { Board } from '../../src/domain/types';
 
-const DAY_1 = unwrap(makeIsoDate('2026-09-01'));
-const DAY_2 = unwrap(makeIsoDate('2026-09-02'));
+const DAY_1 = unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z'));
+const DAY_2 = unwrap(makeIsoTimestamp('2026-09-02T00:00:00Z'));
 
 function headline(text: string) {
   return unwrap(makeHeadline(text));
@@ -103,7 +108,12 @@ describe('complete / uncomplete', () => {
     board = run(board, { type: 'setDescription', id, description: description('notes') }, DAY_1);
     board = run(board, { type: 'complete', id }, DAY_2);
     expect(board.wip).toHaveLength(0);
-    expect(first(board.complete)).toMatchObject({ id, completedAt: DAY_2, description: 'notes', createdAt: DAY_1 });
+    expect(first(board.complete)).toMatchObject({
+      id,
+      completedAt: DAY_2,
+      description: 'notes',
+      createdAt: DAY_1,
+    });
   });
 
   it('reopens a Complete item back to WIP', () => {
@@ -224,7 +234,10 @@ describe('unknown item', () => {
       { type: 'delete', id: missing },
     ];
     for (const command of commands) {
-      expect(applyCommand(board, command)).toEqual({ ok: false, error: { type: 'ItemNotFound', id: missing } });
+      expect(applyCommand(board, command)).toEqual({
+        ok: false,
+        error: { type: 'ItemNotFound', id: missing },
+      });
     }
   });
 });

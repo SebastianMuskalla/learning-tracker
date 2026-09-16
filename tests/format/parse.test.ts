@@ -49,6 +49,22 @@ describe('parse — valid files', () => {
     expect(result.value.board.wip[0]?.description).not.toContain('\r');
   });
 
+  it('accepts a mix of full timestamps and legacy date-only values in the same file', () => {
+    const result = parse(fixture('mixed-timestamp-formats.md'));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.board.new).toMatchObject([
+      { headline: 'Full timestamp', createdAt: '2026-09-16T14:32:07Z' },
+      { headline: 'Legacy date-only', createdAt: '2026-09-15' },
+    ]);
+    expect(result.value.board.complete).toMatchObject([
+      { createdAt: '2026-09-01T08:00:00Z', completedAt: '2026-09-12T17:45:30Z' },
+    ]);
+    expect(result.value.board.discarded).toMatchObject([
+      { createdAt: '2026-08-20', discardedAt: '2026-09-02T09:15:00Z' },
+    ]);
+  });
+
   it('warns, but does not fail, when an active item sits under the wrong New/WIP heading', () => {
     const text = fixture('empty.md').replace(
       '## New\n',

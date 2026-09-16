@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   generateItemId,
   makeHeadline,
-  makeIsoDate,
+  makeIsoTimestamp,
   makeItemId,
   makeOptionalDescription,
+  nowTimestamp,
 } from '../../src/domain/factories';
 
 describe('makeHeadline', () => {
@@ -46,17 +47,35 @@ describe('makeOptionalDescription', () => {
   });
 });
 
-describe('makeIsoDate', () => {
-  it('accepts a valid calendar date', () => {
-    expect(makeIsoDate('2026-09-15')).toEqual({ ok: true, value: '2026-09-15' });
+describe('makeIsoTimestamp', () => {
+  it('accepts a full UTC timestamp', () => {
+    expect(makeIsoTimestamp('2026-09-15T14:32:07Z')).toEqual({ ok: true, value: '2026-09-15T14:32:07Z' });
+  });
+
+  it('accepts a legacy date-only value, keeping it as-is', () => {
+    expect(makeIsoTimestamp('2026-09-15')).toEqual({ ok: true, value: '2026-09-15' });
   });
 
   it('rejects malformed strings', () => {
-    expect(makeIsoDate('15-09-2026').ok).toBe(false);
+    expect(makeIsoTimestamp('15-09-2026').ok).toBe(false);
   });
 
   it('rejects dates that do not exist', () => {
-    expect(makeIsoDate('2026-02-30').ok).toBe(false);
+    expect(makeIsoTimestamp('2026-02-30').ok).toBe(false);
+    expect(makeIsoTimestamp('2026-02-30T00:00:00Z').ok).toBe(false);
+  });
+
+  it('rejects an out-of-range time of day', () => {
+    expect(makeIsoTimestamp('2026-09-15T24:00:00Z').ok).toBe(false);
+    expect(makeIsoTimestamp('2026-09-15T00:60:00Z').ok).toBe(false);
+  });
+});
+
+describe('nowTimestamp', () => {
+  it('generates a full UTC timestamp that makeIsoTimestamp accepts', () => {
+    const ts = nowTimestamp();
+    expect(ts).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    expect(makeIsoTimestamp(ts)).toEqual({ ok: true, value: ts });
   });
 });
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { boardsEqual, emptyBoard, validateBoard } from '../../src/domain/board';
-import { generateItemId, makeHeadline, makeIsoDate } from '../../src/domain/factories';
+import { generateItemId, makeHeadline, makeIsoTimestamp } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
 import type { ActiveItem, Board } from '../../src/domain/types';
 
-const CREATED = unwrap(makeIsoDate('2026-09-01'));
+const CREATED = unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z'));
 const HEADLINE = unwrap(makeHeadline('x'));
 
 function activeItem(overrides: Partial<ActiveItem> = {}): ActiveItem {

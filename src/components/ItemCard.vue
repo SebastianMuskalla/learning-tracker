@@ -70,7 +70,9 @@ function cancelEdit(): void {
     </div>
 
     <div class="actions" @click.stop>
-      <button v-if="section === 'wip'" title="Complete" @click="emit('complete')">✓</button>
+      <button v-if="section === 'wip'" title="Complete" @click="emit('complete')">
+        <i class="fa-solid fa-check" aria-hidden="true"></i>
+      </button>
     </div>
   </li>
 </template>
@@ -140,6 +142,9 @@ function cancelEdit(): void {
 }
 
 .actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 5px;

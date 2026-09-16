@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
 import { sectionOf, type Item, type Section } from '../domain/types';
+import { formatTimestamp } from '../format/displayTimestamp';
 import { highlightCodeBlocks, renderMarkdown } from '../markdown/render';
 
 const { item } = defineProps<{ readonly item: Item }>();
@@ -112,26 +113,36 @@ function onKeydown(event: KeyboardEvent): void {
     <div class="drawer-header">
       <span class="status-badge" :class="sectionOf(item)">{{ statusLabel }}</span>
       <input v-model="headlineDraft" class="headline" @blur="saveHeadline" @keyup.enter="saveHeadline" />
-      <button class="close" title="Close (Esc)" @click="emit('close')">✕</button>
+      <button class="close" title="Close (Esc)" @click="emit('close')">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
     </div>
     <p v-if="headlineError" class="error">{{ headlineError }}</p>
 
     <dl class="dates">
       <dt>Created</dt>
-      <dd>{{ item.createdAt }}</dd>
+      <dd>{{ formatTimestamp(item.createdAt) }}</dd>
       <template v-if="item.status === 'complete'">
         <dt>Completed</dt>
-        <dd>{{ item.completedAt }}</dd>
+        <dd>{{ formatTimestamp(item.completedAt) }}</dd>
       </template>
       <template v-if="item.status === 'discarded'">
         <dt>Discarded</dt>
-        <dd>{{ item.discardedAt }}</dd>
+        <dd>{{ formatTimestamp(item.discardedAt) }}</dd>
       </template>
     </dl>
 
     <h3>Description</h3>
-    <!-- eslint-disable-next-line vue/no-v-html -- renderedHtml is DOMPurify-sanitized in markdown/render.ts -->
-    <div v-if="!descriptionEditing" ref="staticPreviewEl" class="preview preview-static" title="Click to edit" @click="descriptionEditing = true" v-html="renderedHtml" />
+    <!-- eslint-disable vue/no-v-html -- renderedHtml is DOMPurify-sanitized in markdown/render.ts -->
+    <div
+      v-if="!descriptionEditing"
+      ref="staticPreviewEl"
+      class="preview preview-static"
+      title="Click to edit"
+      @click="descriptionEditing = true"
+      v-html="renderedHtml"
+    />
+    <!-- eslint-enable vue/no-v-html -->
     <template v-else>
       <div class="desc-editor">
         <textarea
@@ -144,7 +155,9 @@ function onKeydown(event: KeyboardEvent): void {
         <div ref="livePreviewEl" class="preview" v-html="renderedHtml" />
       </div>
       <div class="desc-actions">
-        <button class="primary" @click="saveDescription">Send</button>
+        <button class="primary" @click="saveDescription">
+          <i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Send
+        </button>
       </div>
     </template>
     <p v-if="descError" class="error">{{ descError }}</p>
@@ -152,12 +165,20 @@ function onKeydown(event: KeyboardEvent): void {
     <h3>Actions</h3>
     <div class="actions">
       <button v-if="item.status === 'active'" :disabled="item.description === null" @click="emit('complete')">
-        ✓ Complete
+        <i class="fa-solid fa-check" aria-hidden="true"></i> Complete
       </button>
-      <button v-if="item.status === 'complete'" @click="emit('uncomplete')">↺ Reopen</button>
-      <button v-if="item.status === 'discarded'" @click="emit('restore')">↩ Restore</button>
-      <button v-if="item.status !== 'discarded'" class="danger" @click="emit('discard')">✕ Discard</button>
-      <button class="danger" @click="showDeleteConfirm = true">🗑 Delete</button>
+      <button v-if="item.status === 'complete'" @click="emit('uncomplete')">
+        <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reopen
+      </button>
+      <button v-if="item.status === 'discarded'" @click="emit('restore')">
+        <i class="fa-solid fa-trash-arrow-up" aria-hidden="true"></i> Restore
+      </button>
+      <button v-if="item.status !== 'discarded'" class="danger" @click="emit('discard')">
+        <i class="fa-solid fa-ban" aria-hidden="true"></i> Discard
+      </button>
+      <button class="danger" @click="showDeleteConfirm = true">
+        <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete
+      </button>
     </div>
 
     <div v-if="showDeleteConfirm" class="confirm-overlay">
@@ -165,9 +186,15 @@ function onKeydown(event: KeyboardEvent): void {
         <h4>Delete "{{ item.headline }}"?</h4>
         <p>This permanently removes the item and its description. This cannot be undone.</p>
         <div class="confirm-actions">
-          <button class="ghost" @click="showDeleteConfirm = false">Cancel</button>
-          <button v-if="item.status !== 'discarded'" class="ghost" @click="discardInstead">✕ Discard instead</button>
-          <button class="danger" @click="confirmDelete">Delete permanently</button>
+          <button class="ghost" @click="showDeleteConfirm = false">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i> Cancel
+          </button>
+          <button v-if="item.status !== 'discarded'" class="ghost" @click="discardInstead">
+            <i class="fa-solid fa-ban" aria-hidden="true"></i> Discard instead
+          </button>
+          <button class="danger" @click="confirmDelete">
+            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete permanently
+          </button>
         </div>
       </div>
     </div>
@@ -225,6 +252,9 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -255,15 +285,30 @@ h3 {
   font-size: 0.9rem;
 }
 
+/* Row vs. column depends on the drawer's own width, not the viewport: the drawer can be narrow
+ * even on a wide screen, and vice versa. */
+.drawer {
+  container-type: inline-size;
+}
+
 .desc-editor {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.6rem;
   margin-top: 0.5rem;
 }
 
+/* Enough room for two ~40ch-minimum boxes plus the gap between them. */
+@container (min-width: 84ch) {
+  .desc-editor {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
 .desc-input {
-  flex: 0 1 80ch;
+  flex: 1 1 40ch;
+  max-width: 80ch;
   min-width: 0;
   min-height: 16rem;
   font-family: 'SF Mono', Consolas, Menlo, monospace;
@@ -275,14 +320,11 @@ h3 {
   min-height: 16rem;
   overflow-wrap: anywhere;
   overflow-y: auto;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.6rem;
 }
 
 .desc-editor .preview {
-  flex: 0 1 80ch;
+  flex: 1 1 40ch;
+  max-width: 80ch;
   min-width: 0;
 }
 
@@ -310,6 +352,14 @@ h3 {
   align-items: flex-start;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+.actions button,
+.desc-actions button,
+.confirm-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
 }
 
 .actions button,

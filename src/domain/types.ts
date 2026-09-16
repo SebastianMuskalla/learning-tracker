@@ -2,12 +2,14 @@
 export type ItemId = string & { readonly __brand: 'ItemId' };
 export type Headline = string & { readonly __brand: 'Headline' };
 export type Description = string & { readonly __brand: 'Description' };
-export type IsoDate = string & { readonly __brand: 'IsoDate' };
+/** A UTC timestamp, either full (`2026-09-16T14:32:07Z`) or, for data written before this app
+ *  tracked time, date-only (`2026-09-16`). See `makeIsoTimestamp` in factories.ts. */
+export type IsoTimestamp = string & { readonly __brand: 'IsoTimestamp' };
 
 export interface ItemBase {
   readonly id: ItemId;
   readonly headline: Headline;
-  readonly createdAt: IsoDate;
+  readonly createdAt: IsoTimestamp;
 }
 
 export type ActiveItem = ItemBase & {
@@ -18,13 +20,13 @@ export type ActiveItem = ItemBase & {
 export type CompleteItem = ItemBase & {
   readonly status: 'complete';
   readonly description: Description;
-  readonly completedAt: IsoDate;
+  readonly completedAt: IsoTimestamp;
 };
 
 export type DiscardedItem = ItemBase & {
   readonly status: 'discarded';
   readonly description: Description | null;
-  readonly discardedAt: IsoDate;
+  readonly discardedAt: IsoTimestamp;
 };
 
 export type Item = ActiveItem | CompleteItem | DiscardedItem;

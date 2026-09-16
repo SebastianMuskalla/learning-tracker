@@ -1,4 +1,4 @@
-import { generateItemId, today } from './factories';
+import { generateItemId, nowTimestamp } from './factories';
 import { err, ok, type Result } from './result';
 import type {
   ActiveItem,
@@ -8,7 +8,7 @@ import type {
   DiscardedItem,
   Headline,
   Item,
-  IsoDate,
+  IsoTimestamp,
   ItemId,
   Section,
 } from './types';
@@ -21,7 +21,12 @@ export type Command =
   | { readonly type: 'uncomplete'; readonly id: ItemId }
   | { readonly type: 'discard'; readonly id: ItemId }
   | { readonly type: 'restore'; readonly id: ItemId }
-  | { readonly type: 'reorder'; readonly section: Section; readonly fromIndex: number; readonly toIndex: number }
+  | {
+      readonly type: 'reorder';
+      readonly section: Section;
+      readonly fromIndex: number;
+      readonly toIndex: number;
+    }
   | { readonly type: 'delete'; readonly id: ItemId };
 
 export type DomainError =
@@ -48,7 +53,8 @@ function locate(board: Board, id: ItemId): Located | undefined {
 
   const completeIndex = board.complete.findIndex((item) => item.id === id);
   const completeItem = board.complete.find((item) => item.id === id);
-  if (completeIndex !== -1 && completeItem) return { section: 'complete', index: completeIndex, item: completeItem };
+  if (completeIndex !== -1 && completeItem)
+    return { section: 'complete', index: completeIndex, item: completeItem };
 
   const discardedIndex = board.discarded.findIndex((item) => item.id === id);
   const discardedItem = board.discarded.find((item) => item.id === id);
@@ -88,7 +94,11 @@ function prependDiscarded(board: Board, item: DiscardedItem): Board {
   return { ...board, discarded: [item, ...board.discarded] };
 }
 
-export function applyCommand(board: Board, command: Command, now: IsoDate = today()): Result<Board, DomainError> {
+export function applyCommand(
+  board: Board,
+  command: Command,
+  now: IsoTimestamp = nowTimestamp(),
+): Result<Board, DomainError> {
   switch (command.type) {
     case 'add':
       return applyAdd(board, command.headline, now);
@@ -111,7 +121,7 @@ export function applyCommand(board: Board, command: Command, now: IsoDate = toda
   }
 }
 
-function applyAdd(board: Board, headline: Headline, now: IsoDate): Result<Board, DomainError> {
+function applyAdd(board: Board, headline: Headline, now: IsoTimestamp): Result<Board, DomainError> {
   const item: ActiveItem = {
     id: generateItemId(),
     headline,
@@ -131,9 +141,15 @@ function applyEditHeadline(board: Board, id: ItemId, headline: Headline): Result
     case 'wip':
       return ok({ ...board, wip: replaceAt(board.wip, located.index, { ...located.item, headline }) });
     case 'complete':
-      return ok({ ...board, complete: replaceAt(board.complete, located.index, { ...located.item, headline }) });
+      return ok({
+        ...board,
+        complete: replaceAt(board.complete, located.index, { ...located.item, headline }),
+      });
     case 'discarded':
-      return ok({ ...board, discarded: replaceAt(board.discarded, located.index, { ...located.item, headline }) });
+      return ok({
+        ...board,
+        discarded: replaceAt(board.discarded, located.index, { ...located.item, headline }),
+      });
   }
 }
 
@@ -150,7 +166,10 @@ function applySetDescription(
       if (description === null) {
         return err({ type: 'CompleteRequiresDescription', id });
       }
-      return ok({ ...board, complete: replaceAt(board.complete, located.index, { ...located.item, description }) });
+      return ok({
+        ...board,
+        complete: replaceAt(board.complete, located.index, { ...located.item, description }),
+      });
     }
     case 'discarded':
       return ok({
@@ -173,7 +192,7 @@ function applySetDescription(
   }
 }
 
-function applyComplete(board: Board, id: ItemId, now: IsoDate): Result<Board, DomainError> {
+function applyComplete(board: Board, id: ItemId, now: IsoTimestamp): Result<Board, DomainError> {
   const located = locate(board, id);
   if (!located) return err({ type: 'ItemNotFound', id });
   if (located.section !== 'new' && located.section !== 'wip') {
@@ -209,7 +228,7 @@ function applyUncomplete(board: Board, id: ItemId): Result<Board, DomainError> {
   return ok(prependWip(removeAt(board, located), activeItem));
 }
 
-function applyDiscard(board: Board, id: ItemId, now: IsoDate): Result<Board, DomainError> {
+function applyDiscard(board: Board, id: ItemId, now: IsoTimestamp): Result<Board, DomainError> {
   const located = locate(board, id);
   if (!located) return err({ type: 'ItemNotFound', id });
   if (located.section === 'discarded') {
@@ -240,7 +259,11 @@ function applyRestore(board: Board, id: ItemId): Result<Board, DomainError> {
     description: located.item.description,
   };
   const withoutOld = removeAt(board, located);
-  return ok(located.item.description === null ? prependNew(withoutOld, activeItem) : prependWip(withoutOld, activeItem));
+  return ok(
+    located.item.description === null
+      ? prependNew(withoutOld, activeItem)
+      : prependWip(withoutOld, activeItem),
+  );
 }
 
 function reorderList<T>(list: readonly T[], fromIndex: number, toIndex: number): T[] | undefined {

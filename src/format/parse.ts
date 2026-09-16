@@ -1,4 +1,4 @@
-import { makeHeadline, makeIsoDate, makeItemId, makeOptionalDescription } from '../domain/factories';
+import { makeHeadline, makeIsoTimestamp, makeItemId, makeOptionalDescription } from '../domain/factories';
 import { err, ok, type Result } from '../domain/result';
 import { validateBoard } from '../domain/board';
 import type {
@@ -7,7 +7,7 @@ import type {
   CompleteItem,
   Description,
   DiscardedItem,
-  IsoDate,
+  IsoTimestamp,
   Item,
   ItemId,
   Section,
@@ -36,8 +36,12 @@ const SECTION_SEQUENCE: readonly { readonly section: Section; readonly heading: 
   { section: 'discarded', heading: '## Discarded' },
 ];
 
-const META_RE =
-  /^<!-- id:([0-9A-Za-z]{26}) created:(\d{4}-\d{2}-\d{2})(?: completed:(\d{4}-\d{2}-\d{2}))?(?: discarded:(\d{4}-\d{2}-\d{2}))? -->$/;
+// A timestamp value is either the current full format (`2026-09-16T14:32:07Z`) or the legacy
+// date-only format (`2026-09-16`) written before this app tracked time; see makeIsoTimestamp.
+const TS = String.raw`\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?`;
+const META_RE = new RegExp(
+  `^<!-- id:([0-9A-Za-z]{26}) created:(${TS})(?: completed:(${TS}))?(?: discarded:(${TS}))? -->$`,
+);
 
 class Cursor {
   private index = 0;
@@ -165,7 +169,10 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
   const headlineText = headlineLine.slice('### '.length);
   const headlineResult = makeHeadline(headlineText);
   if (!headlineResult.ok) {
-    return err({ line: cursor.lineNumber - 1, reason: `Invalid headline: ${JSON.stringify(headlineResult.error)}` });
+    return err({
+      line: cursor.lineNumber - 1,
+      reason: `Invalid headline: ${JSON.stringify(headlineResult.error)}`,
+    });
   }
 
   const metaLine = cursor.advance();
@@ -174,7 +181,10 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
   }
   const match = META_RE.exec(metaLine);
   if (!match) {
-    return err({ line: cursor.lineNumber - 1, reason: `Malformed metadata comment: ${describeLine(metaLine)}` });
+    return err({
+      line: cursor.lineNumber - 1,
+      reason: `Malformed metadata comment: ${describeLine(metaLine)}`,
+    });
   }
   const rawId = match[1] ?? '';
   const rawCreated = match[2] ?? '';
@@ -185,40 +195,43 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
   if (!idResult.ok) {
     return err({ line: cursor.lineNumber - 1, reason: `Invalid id: ${JSON.stringify(idResult.error)}` });
   }
-  const createdResult = makeIsoDate(rawCreated);
+  const createdResult = makeIsoTimestamp(rawCreated);
   if (!createdResult.ok) {
     return err({
       line: cursor.lineNumber - 1,
-      reason: `Invalid created date: ${JSON.stringify(createdResult.error)}`,
+      reason: `Invalid created timestamp: ${JSON.stringify(createdResult.error)}`,
     });
   }
 
-  let completedAt: IsoDate | undefined;
+  let completedAt: IsoTimestamp | undefined;
   if (rawCompleted !== undefined) {
-    const completedResult = makeIsoDate(rawCompleted);
+    const completedResult = makeIsoTimestamp(rawCompleted);
     if (!completedResult.ok) {
       return err({
         line: cursor.lineNumber - 1,
-        reason: `Invalid completed date: ${JSON.stringify(completedResult.error)}`,
+        reason: `Invalid completed timestamp: ${JSON.stringify(completedResult.error)}`,
       });
     }
     completedAt = completedResult.value;
   }
 
-  let discardedAt: IsoDate | undefined;
+  let discardedAt: IsoTimestamp | undefined;
   if (rawDiscarded !== undefined) {
-    const discardedResult = makeIsoDate(rawDiscarded);
+    const discardedResult = makeIsoTimestamp(rawDiscarded);
     if (!discardedResult.ok) {
       return err({
         line: cursor.lineNumber - 1,
-        reason: `Invalid discarded date: ${JSON.stringify(discardedResult.error)}`,
+        reason: `Invalid discarded timestamp: ${JSON.stringify(discardedResult.error)}`,
       });
     }
     discardedAt = discardedResult.value;
   }
 
   if (completedAt !== undefined && discardedAt !== undefined) {
-    return err({ line: cursor.lineNumber - 1, reason: 'An item cannot have both completed: and discarded: metadata' });
+    return err({
+      line: cursor.lineNumber - 1,
+      reason: 'An item cannot have both completed: and discarded: metadata',
+    });
   }
 
   const descResult = parseOptionalDescription(cursor);
@@ -226,12 +239,15 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
   const description = descResult.value;
 
   const id: ItemId = idResult.value;
-  const createdAt: IsoDate = createdResult.value;
+  const createdAt: IsoTimestamp = createdResult.value;
   const headline = headlineResult.value;
 
   if (discardedAt !== undefined) {
     if (fileSection !== 'discarded') {
-      return err({ line: cursor.lineNumber, reason: 'Item with discarded: metadata found outside the Discarded section' });
+      return err({
+        line: cursor.lineNumber,
+        reason: 'Item with discarded: metadata found outside the Discarded section',
+      });
     }
     const item: DiscardedItem = { id, headline, createdAt, status: 'discarded', description, discardedAt };
     return ok({ item, warning: undefined });
@@ -239,7 +255,10 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
 
   if (completedAt !== undefined) {
     if (fileSection !== 'complete') {
-      return err({ line: cursor.lineNumber, reason: 'Item with completed: metadata found outside the Complete section' });
+      return err({
+        line: cursor.lineNumber,
+        reason: 'Item with completed: metadata found outside the Complete section',
+      });
     }
     if (description === null) {
       return err({ line: cursor.lineNumber, reason: 'A Complete item must have a description' });
@@ -279,7 +298,10 @@ function parseOptionalDescription(cursor: Cursor): Result<Description | null, Pa
   for (;;) {
     const line = cursor.peek();
     if (line === undefined) {
-      return err({ line: cursor.lineNumber, reason: `Unterminated description block (missing "${DESC_END}")` });
+      return err({
+        line: cursor.lineNumber,
+        reason: `Unterminated description block (missing "${DESC_END}")`,
+      });
     }
     if (line === DESC_END) {
       cursor.advance();
@@ -290,7 +312,10 @@ function parseOptionalDescription(cursor: Cursor): Result<Description | null, Pa
   }
   const descResult = makeOptionalDescription(rawLines.join('\n'));
   if (!descResult.ok) {
-    return err({ line: cursor.lineNumber, reason: `Invalid description: ${JSON.stringify(descResult.error)}` });
+    return err({
+      line: cursor.lineNumber,
+      reason: `Invalid description: ${JSON.stringify(descResult.error)}`,
+    });
   }
   return ok(descResult.value);
 }
