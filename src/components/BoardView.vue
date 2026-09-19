@@ -31,11 +31,15 @@ onMounted(() => {
   void boardStore.load();
   document.addEventListener('visibilitychange', onVisibilityChange);
   document.addEventListener('keydown', onGlobalKeydown);
+  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('beforeunload', onBeforeUnload);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange);
   document.removeEventListener('keydown', onGlobalKeydown);
+  window.removeEventListener('pagehide', onPageHide);
+  window.removeEventListener('beforeunload', onBeforeUnload);
 });
 
 watch(
@@ -50,8 +54,24 @@ watch(
 
 function onVisibilityChange(): void {
   if (document.visibilityState === 'visible') {
-    void boardStore.load();
+    // `refresh`, unlike `load`, skips itself while there is unwritten local work, so switching
+    // back to this tab mid-edit can never overwrite it with an older remote version.
+    void boardStore.refresh();
+  } else {
+    // The tab may never become visible again (close, navigate away). Get unsaved work out the
+    // door now, best-effort, rather than only on the next successful debounce.
+    boardStore.flushBeforeUnload();
   }
+}
+
+function onPageHide(): void {
+  boardStore.flushBeforeUnload();
+}
+
+function onBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!boardStore.hasUnsavedWork) return;
+  // No browser lets us show custom text any more; this is what triggers its own generic prompt.
+  event.preventDefault();
 }
 
 function onGlobalKeydown(event: KeyboardEvent): void {
@@ -127,7 +147,7 @@ function onSetDescription(id: ItemId, text: string): void {
 
     <div v-if="boardStore.fileNotFound" class="notice">
       <p>learning.md was not found in {{ settings.owner }}/{{ settings.repo }}.</p>
-      <button @click="boardStore.initializeEmptyFile()">
+      <button :disabled="boardStore.syncStatus === 'saving'" @click="boardStore.initializeEmptyFile()">
         <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i> Create it
       </button>
     </div>

@@ -9,6 +9,7 @@ const { syncStatus, errorMessage } = defineProps<{
 const STATUS_LABEL: Record<SyncStatus, string> = {
   idle: 'Idle',
   loading: 'Loading…',
+  pending: 'Unsaved changes…',
   saving: 'Saving…',
   saved: 'Saved',
   error: 'Error',
@@ -56,7 +57,8 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
 }
 
 .overlay.saving .label,
-.overlay.loading .label {
+.overlay.loading .label,
+.overlay.pending .label {
   color: var(--warning);
 }
 

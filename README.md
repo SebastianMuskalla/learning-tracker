@@ -6,7 +6,8 @@ Each topic moves through four states: **New**, **WIP** (work in progress),
 
 The app stores your topics in one Markdown file, `learning.md`. This file
 lives in a private GitHub repository. The app reads and writes the file
-through the GitHub API. Every change makes one commit.
+through the GitHub API. A quiet moment after you stop making changes
+becomes one commit; see "Saving and conflicts" below.
 
 The app has no backend server. It runs only in your browser. You host it as
 a static site on GitHub Pages.
@@ -215,6 +216,38 @@ The file can fail to parse. A hand-edit mistake is one common cause. When
 this happens, the app shows the error with a line number. It links to the
 file on github.com. It blocks all further writes until you fix the file.
 Your last good version is always in the repository's git history.
+
+## Saving and conflicts
+
+The app does not send one commit per click. It waits about a second after
+your last change, then writes everything from that burst as one commit. A
+long burst of changes, or ten changes in a row, forces a write sooner, so
+nothing waits too long. While a write is pending or in progress, the bottom
+corner shows "Unsaved changes…" or "Saving…".
+
+If you try to close the tab (or reload it) while a write is still pending,
+the browser asks you to confirm, so you do not lose it by accident. The app
+also tries to send the pending write right away when the tab is hidden or
+closed, as a best effort; the confirmation prompt is the backstop for when
+that does not finish in time.
+
+Sometimes a write is rejected because the file changed on GitHub in the
+meantime. Most of the time this is not a real conflict — for example, GitHub
+can briefly answer a read with an older version of the file right after a
+write, or two changes to different topics do not actually clash. The app
+reads the current file, and:
+
+- if it turns out nothing you care about actually changed, it retries the
+  write on its own;
+- if the changes are to different topics (or the same topic changed the
+  same way twice), it combines both automatically and retries;
+- only when the _same_ topic was changed differently in both places does it
+  ask you. It then shows your version and GitHub's version side by side, and
+  you pick which one to keep — the other is discarded.
+
+Refreshing the page, or switching back to the tab after a while, re-reads
+`learning.md` from GitHub — unless a write is still pending, so a refresh
+can never throw away work you have not saved yet.
 
 ## Security
 

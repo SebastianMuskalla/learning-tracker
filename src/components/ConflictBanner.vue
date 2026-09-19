@@ -22,10 +22,10 @@ const SECTIONS: readonly { readonly key: Section; readonly title: string }[] = [
 <template>
   <div class="overlay">
     <div class="dialog">
-      <h2>Someone else saved learning.md first</h2>
+      <h2>learning.md changed in two places</h2>
       <p class="hint">
-        Your change and the version already on GitHub can't both be kept automatically. Compare them below and
-        pick one — the other is discarded.
+        The same item was changed differently here and on GitHub, so the app could not combine them
+        automatically. Compare the two versions below and pick one — the other is discarded.
       </p>
 
       <div class="versions">

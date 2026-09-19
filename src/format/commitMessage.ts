@@ -34,3 +34,14 @@ export function commitMessage(command: Command, item: Item | undefined): string 
 }
 
 export const INITIALIZE_MESSAGE = 'Initialize learning.md';
+
+/**
+ * Combines the per-command messages of one debounced batch into a single commit message.
+ * A batch of one keeps that command's own message; a bigger batch gets a subject line plus
+ * one line per command in the body, so several quick edits become one commit, not several.
+ */
+export function combineMessages(messages: readonly string[]): string {
+  const [first] = messages;
+  if (first === undefined || messages.length === 1) return first ?? '';
+  return `Update learning.md (${String(messages.length)} changes)\n\n${messages.map((m) => `- ${m}`).join('\n')}`;
+}

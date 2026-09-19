@@ -15,7 +15,11 @@ export interface FileContents {
 
 export async function getFile(config: GithubRepoConfig): Promise<Result<FileContents, GithubClientError>> {
   const url = `${API_ROOT}/repos/${config.owner}/${config.repo}/contents/${encodePath(config.path)}?ref=${encodeURIComponent(config.branch)}`;
-  const response = await request(url, config.token, { method: 'GET' });
+  // GitHub answers with `Cache-Control: private, max-age=60`. The browser's default fetch
+  // cache mode is then free to answer a reload from that stale response for up to a minute,
+  // which makes the app believe an old `sha` is still current and triggers a false conflict
+  // on the next write. `no-store` forces every read to actually reach GitHub.
+  const response = await request(url, config.token, { method: 'GET', cache: 'no-store' });
   if (!response.ok) return response;
 
   const body = (await response.value.json()) as GithubContentsGetResponse;
@@ -29,6 +33,8 @@ export interface PutFileInput {
   readonly text: string;
   readonly sha: string | null;
   readonly message: string;
+  /** Lets the request outlive the page — used only for the best-effort flush on tab close. */
+  readonly keepalive?: boolean;
 }
 
 export async function putFile(
@@ -44,6 +50,8 @@ export async function putFile(
       branch: config.branch,
       ...(input.sha === null ? {} : { sha: input.sha }),
     }),
+    cache: 'no-store',
+    ...(input.keepalive === true ? { keepalive: true } : {}),
   });
   if (!response.ok) return response;
 
@@ -58,13 +66,20 @@ export async function putFile(
 async function request(
   url: string,
   token: string,
-  init: { readonly method: 'GET' | 'PUT'; readonly body?: string },
+  init: {
+    readonly method: 'GET' | 'PUT';
+    readonly body?: string;
+    readonly cache?: RequestCache;
+    readonly keepalive?: boolean;
+  },
 ): Promise<Result<Response, GithubClientError>> {
   let response: Response;
   try {
     response = await fetch(url, {
       method: init.method,
       ...(init.body === undefined ? {} : { body: init.body }),
+      ...(init.cache === undefined ? {} : { cache: init.cache }),
+      ...(init.keepalive === undefined ? {} : { keepalive: init.keepalive }),
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
