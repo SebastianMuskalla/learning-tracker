@@ -4,6 +4,8 @@ import { makeHeadline, makeOptionalDescription } from '../domain/factories';
 import { sectionOf, type Item, type Section } from '../domain/types';
 import { formatTimestamp } from '../format/displayTimestamp';
 import { highlightCodeBlocks, renderMarkdown } from '../markdown/render';
+import { markHits } from '../search/markDom';
+import { useSearchStore } from '../store/search';
 
 const { item } = defineProps<{ readonly item: Item }>();
 
@@ -26,6 +28,7 @@ const SECTION_LABEL: Record<Section, string> = {
 };
 
 const statusLabel = computed(() => SECTION_LABEL[sectionOf(item)]);
+const searchStore = useSearchStore();
 
 const headlineDraft = ref(item.headline);
 const descriptionDraft = ref<string>(item.description ?? '');
@@ -38,12 +41,37 @@ const descriptionEditing = ref(item.status !== 'complete');
 
 const renderedHtml = computed(() => renderMarkdown(descriptionDraft.value));
 
+async function refreshHighlights(): Promise<void> {
+  await nextTick();
+  if (livePreviewEl.value) {
+    await highlightCodeBlocks(livePreviewEl.value);
+    markHits(livePreviewEl.value, searchStore.term);
+  }
+  if (staticPreviewEl.value) {
+    await highlightCodeBlocks(staticPreviewEl.value);
+    markHits(staticPreviewEl.value, searchStore.term);
+  }
+}
+
+function scrollFirstMarkIntoView(): void {
+  if (!searchStore.isActive) return;
+  const container = descriptionEditing.value ? livePreviewEl.value : staticPreviewEl.value;
+  const firstMark = container?.querySelector('mark.search-hit');
+  if (firstMark instanceof HTMLElement) {
+    firstMark.scrollIntoView({ block: 'center' });
+  }
+}
+
+// Marks are refreshed whenever the rendered content, the edit/preview toggle, or the search term
+// changes. Scrolling the first hit into view, though, only happens when the drawer opens (on the
+// first, immediate run, `oldTerm`/`oldId` are `undefined`) or the search term itself changes — not
+// on every content edit, which would otherwise yank the scroll position around while typing.
 watch(
-  [renderedHtml, descriptionEditing],
-  async () => {
-    await nextTick();
-    if (livePreviewEl.value) await highlightCodeBlocks(livePreviewEl.value);
-    if (staticPreviewEl.value) await highlightCodeBlocks(staticPreviewEl.value);
+  [renderedHtml, descriptionEditing, () => searchStore.term, () => item.id],
+  async ([, , newTerm, newId], [, , oldTerm, oldId]) => {
+    const shouldScroll = newTerm !== oldTerm || newId !== oldId;
+    await refreshHighlights();
+    if (shouldScroll) scrollFirstMarkIntoView();
   },
   { immediate: true },
 );

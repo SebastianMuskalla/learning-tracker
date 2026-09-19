@@ -4,10 +4,11 @@ import { ref, watch } from 'vue';
 import type { Item, ItemId, Section } from '../domain/types';
 import ItemCard from './ItemCard.vue';
 
-const { items } = defineProps<{
+const { items, dragDisabled } = defineProps<{
   readonly title: string;
   readonly section: Section;
   readonly items: readonly Item[];
+  readonly dragDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -41,7 +42,16 @@ function onUpdate(event: DraggableEvent<Item>): void {
       <span class="count">{{ items.length }}</span>
     </div>
 
-    <VueDraggable v-model="localItems" tag="ul" class="list" handle=".handle" :animation="150" @update="onUpdate">
+    <VueDraggable
+      v-model="localItems"
+      tag="ul"
+      class="list"
+      :class="{ 'drag-disabled': dragDisabled }"
+      handle=".handle"
+      :animation="150"
+      :disabled="dragDisabled"
+      @update="onUpdate"
+    >
       <ItemCard
         v-for="item in localItems"
         :key="item.id"
@@ -107,5 +117,9 @@ function onUpdate(event: DraggableEvent<Item>): void {
   margin: 0.6rem 0 0;
   padding: 0;
   min-height: 0.5rem;
+}
+
+.list.drag-disabled :deep(.handle) {
+  visibility: hidden;
 }
 </style>

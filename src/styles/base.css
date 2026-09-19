@@ -21,6 +21,8 @@
 
   --drawer-width: min(100vw, 40rem);
 
+  --search-highlight: rgba(250, 204, 21, 0.55);
+
   color-scheme: light dark;
 }
 
@@ -52,6 +54,8 @@
     --wip: #6fbb92;
     --complete: #7ab0e6;
     --discarded: #9a9587;
+
+    --search-highlight: rgba(250, 204, 21, 0.35);
   }
 }
 
@@ -106,6 +110,16 @@ a {
 code,
 pre {
   font-family: 'SF Mono', Consolas, Menlo, monospace;
+}
+
+/* Marks added by the search feature. This lives here, not in a component's scoped styles, because
+ * some marks are added directly to `v-html` content by src/search/markDom.ts, which scoped styles
+ * cannot reach without `:deep` at every use site. */
+mark.search-hit {
+  background: var(--search-highlight);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 0.1em;
 }
 
 #app {

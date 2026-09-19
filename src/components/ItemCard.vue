@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { makeHeadline } from '../domain/factories';
 import { renderMarkdown } from '../markdown/render';
+import { markHits } from '../search/markDom';
+import { normalize, splitIntoSegments } from '../search/match';
+import { useSearchStore } from '../store/search';
 import type { Item, Section } from '../domain/types';
 
 const { item, section } = defineProps<{
@@ -15,13 +18,59 @@ const emit = defineEmits<{
   editHeadline: [headline: string];
 }>();
 
+const searchStore = useSearchStore();
+
 const editing = ref(false);
 const draft = ref(item.headline);
 const editError = ref('');
+const descPreviewEl = ref<HTMLElement | null>(null);
+const showDescHint = ref(false);
 
 const descriptionPreviewHtml = computed(() =>
   item.description !== null ? renderMarkdown(item.description) : null,
 );
+
+const headlineSegments = computed(() =>
+  searchStore.isActive ? splitIntoSegments(item.headline, searchStore.term) : [{ text: item.headline, hit: false }],
+);
+
+watch(
+  [descriptionPreviewHtml, () => searchStore.term],
+  async () => {
+    await nextTick();
+    updateDescriptionHighlight();
+  },
+  { immediate: true },
+);
+
+function updateDescriptionHighlight(): void {
+  if (descPreviewEl.value === null) {
+    showDescHint.value = false;
+    return;
+  }
+  if (!searchStore.isActive) {
+    markHits(descPreviewEl.value, '');
+    showDescHint.value = false;
+    return;
+  }
+
+  const { markCount } = markHits(descPreviewEl.value, searchStore.term);
+  if (markCount === 0) {
+    // The raw Markdown source can match without producing a visible mark, e.g. a hit only in a
+    // link's target URL, which is not part of the rendered text.
+    showDescHint.value =
+      item.description !== null && normalize(item.description).text.includes(searchStore.normalizedTerm);
+    return;
+  }
+
+  const firstMark = descPreviewEl.value.querySelector('mark.search-hit');
+  if (firstMark instanceof HTMLElement) {
+    const visible = firstMark.offsetTop + firstMark.offsetHeight <= descPreviewEl.value.clientHeight;
+    showDescHint.value = !visible;
+  } else {
+    showDescHint.value = false;
+  }
+}
 
 function startEdit(event: MouseEvent): void {
   event.stopPropagation();
@@ -62,11 +111,17 @@ function cancelEdit(): void {
         @keyup.esc="cancelEdit"
         @blur="commitEdit"
       />
-      <span v-else class="headline" @dblclick="startEdit">{{ item.headline }}</span>
+      <span v-else class="headline" @dblclick="startEdit">
+        <template v-for="(segment, index) in headlineSegments" :key="index">
+          <mark v-if="segment.hit" class="search-hit">{{ segment.text }}</mark>
+          <template v-else>{{ segment.text }}</template>
+        </template>
+      </span>
       <p v-if="editError" class="edit-error">{{ editError }}</p>
 
       <!-- eslint-disable-next-line vue/no-v-html -- descriptionPreviewHtml is DOMPurify-sanitized in markdown/render.ts -->
-      <div v-if="descriptionPreviewHtml" class="desc-preview" v-html="descriptionPreviewHtml" />
+      <div v-if="descriptionPreviewHtml" ref="descPreviewEl" class="desc-preview" v-html="descriptionPreviewHtml" />
+      <p v-if="showDescHint" class="desc-hint">Also matches in the description (not visible in this preview)</p>
     </div>
 
     <div class="actions" @click.stop>
@@ -117,6 +172,7 @@ function cancelEdit(): void {
 }
 
 .desc-preview {
+  position: relative;
   margin-top: 0.35rem;
   font-size: 0.8rem;
   line-height: 1.4em;
@@ -134,6 +190,13 @@ function cancelEdit(): void {
 .desc-preview :deep(pre) {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.desc-hint {
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--text-muted);
 }
 
 .actions {

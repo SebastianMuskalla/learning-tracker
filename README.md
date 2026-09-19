@@ -123,6 +123,28 @@ the build about it, using either option:
 
 The app now loads your topics and is ready to use.
 
+## Search
+
+A floating search bar sits in the bottom-left corner of the board, next to
+the sync status box. Press **Ctrl+F** or **Ctrl+K** (**Cmd** on macOS) to
+jump to it from anywhere, including while editing a description; press the
+same keys again while it already has focus to fall back to the browser's own
+shortcut.
+
+An item matches when the search term appears in its headline or its
+description, ignoring case and ignoring spaces, line breaks, and punctuation
+(so `some text` also matches `Some Text`, `sometext`, and `some-text`).
+Matching text is highlighted in the list and in the open item's detail view.
+While the search bar is not empty, it shows how many items match out of the
+total, an X button to clear it, and only matching items appear on the board.
+Reordering by drag-and-drop is paused while a search is active, since the
+positions on screen no longer line up with the full, unfiltered list.
+
+A card's description preview is clipped to a few lines; if a description
+matches the search only further down, or only in a link's target rather
+than its visible text, the card shows a short note that it still matches, so
+you know to open it.
+
 ### Token storage modes
 
 | Mode                        | Where the token is kept                                                        | Use it when                                                   |
@@ -269,6 +291,5 @@ can never throw away work you have not saved yet.
 
 ## Future ideas
 
-- Search functionality
 - Tags
 - Syntax highlighting for languages

@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
-import { findItemById } from '../domain/types';
-import type { ItemId, Section } from '../domain/types';
+import { allItems, findItemById } from '../domain/types';
+import type { Board, ItemId, Section } from '../domain/types';
+import { itemMatches } from '../search/match';
+import { searchShortcutAction } from '../search/shortcut';
 import { useBoardStore } from '../store/board';
+import { useSearchStore } from '../store/search';
 import { useSettingsStore } from '../store/settings';
 import ConflictBanner from './ConflictBanner.vue';
 import ItemDetailDrawer from './ItemDetailDrawer.vue';
 import ParseErrorBanner from './ParseErrorBanner.vue';
+import SearchBar from './SearchBar.vue';
 import SectionColumn from './SectionColumn.vue';
 import SyncStatusOverlay from './SyncStatusOverlay.vue';
 import TopBar from './TopBar.vue';
@@ -16,8 +20,10 @@ const emit = defineEmits<{ openSettings: [reason?: string] }>();
 
 const settings = useSettingsStore();
 const boardStore = useBoardStore();
+const searchStore = useSearchStore();
 
 const topBar = ref<{ focusAddInput: () => void } | null>(null);
+const searchBar = ref<{ focus: () => void; hasFocus: () => boolean } | null>(null);
 const selectedId = ref<ItemId | null>(null);
 const selectedItem = computed(() =>
   selectedId.value === null ? null : (findItemById(boardStore.board, selectedId.value) ?? null),
@@ -26,6 +32,21 @@ const selectedItem = computed(() =>
 const fileUrl = computed(
   () => `https://github.com/${settings.owner}/${settings.repo}/blob/${settings.branch}/${settings.path}`,
 );
+
+function filterSection<T extends { headline: string; description: string | null }>(items: readonly T[]): T[] {
+  if (!searchStore.isActive) return [...items];
+  return items.filter((item) => itemMatches(item, searchStore.term));
+}
+
+const visibleBoard = computed<Board>(() => ({
+  new: filterSection(boardStore.board.new),
+  wip: filterSection(boardStore.board.wip),
+  complete: filterSection(boardStore.board.complete),
+  discarded: filterSection(boardStore.board.discarded),
+}));
+
+const totalCount = computed(() => allItems(boardStore.board).length);
+const matchCount = computed(() => allItems(visibleBoard.value).length);
 
 onMounted(() => {
   void boardStore.load();
@@ -75,6 +96,14 @@ function onBeforeUnload(event: BeforeUnloadEvent): void {
 }
 
 function onGlobalKeydown(event: KeyboardEvent): void {
+  const shortcutAction = searchShortcutAction(event, searchBar.value?.hasFocus() ?? false);
+  if (shortcutAction === 'focus') {
+    event.preventDefault();
+    searchBar.value?.focus();
+    return;
+  }
+  if (shortcutAction === 'browser') return;
+
   // eslint-disable-next-line no-restricted-syntax -- DOM event target, not a branded-type cast
   const target = event.target as HTMLElement | null;
   const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
@@ -156,7 +185,8 @@ function onSetDescription(id: ItemId, text: string): void {
       <SectionColumn
         title="New"
         section="new"
-        :items="boardStore.board.new"
+        :items="visibleBoard.new"
+        :drag-disabled="searchStore.isActive"
         @reorder="(f: number, t: number) => onReorder('new', f, t)"
         @select="onSelect"
         @edit-headline="onEditHeadline"
@@ -164,7 +194,8 @@ function onSetDescription(id: ItemId, text: string): void {
       <SectionColumn
         title="WIP"
         section="wip"
-        :items="boardStore.board.wip"
+        :items="visibleBoard.wip"
+        :drag-disabled="searchStore.isActive"
         @reorder="(f: number, t: number) => onReorder('wip', f, t)"
         @select="onSelect"
         @complete="onComplete"
@@ -173,7 +204,8 @@ function onSetDescription(id: ItemId, text: string): void {
       <SectionColumn
         title="Complete"
         section="complete"
-        :items="boardStore.board.complete"
+        :items="visibleBoard.complete"
+        :drag-disabled="searchStore.isActive"
         @reorder="(f: number, t: number) => onReorder('complete', f, t)"
         @select="onSelect"
         @edit-headline="onEditHeadline"
@@ -181,7 +213,8 @@ function onSetDescription(id: ItemId, text: string): void {
       <SectionColumn
         title="Discarded"
         section="discarded"
-        :items="boardStore.board.discarded"
+        :items="visibleBoard.discarded"
+        :drag-disabled="searchStore.isActive"
         @reorder="(f: number, t: number) => onReorder('discarded', f, t)"
         @select="onSelect"
         @edit-headline="onEditHeadline"
@@ -210,6 +243,13 @@ function onSetDescription(id: ItemId, text: string): void {
     />
 
     <SyncStatusOverlay :sync-status="boardStore.syncStatus" :error-message="boardStore.errorMessage" />
+
+    <SearchBar
+      v-if="!boardStore.fileNotFound"
+      ref="searchBar"
+      :match-count="matchCount"
+      :total-count="totalCount"
+    />
   </div>
 </template>
 
