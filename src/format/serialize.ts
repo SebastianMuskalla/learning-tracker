@@ -1,4 +1,4 @@
-import type { Board, Item, Section } from '../domain/types';
+import type { Board, Item, Section, Tag } from '../domain/types';
 
 export const FORMAT_VERSION = 'v1';
 export const HEADER_TITLE = '# Learning';
@@ -17,6 +17,12 @@ const SECTION_ORDER: readonly Section[] = ['new', 'wip', 'complete', 'discarded'
 
 export function serialize(board: Board): string {
   const lines: string[] = [HEADER_TITLE, '', HEADER_COMMENT, ''];
+  for (const tag of board.tags) {
+    lines.push(tagDefLine(tag));
+  }
+  if (board.tags.length > 0) {
+    lines.push('');
+  }
 
   for (const section of SECTION_ORDER) {
     lines.push(`## ${SECTION_TITLES[section]}`, '');
@@ -46,5 +52,12 @@ function metaLine(item: Item): string {
   if (item.status === 'discarded') {
     parts.push(`discarded:${item.discardedAt}`);
   }
+  if (item.tags.length > 0) {
+    parts.push(`tags:${item.tags.join(',')}`);
+  }
   return `<!-- ${parts.join(' ')} -->`;
+}
+
+function tagDefLine(tag: Tag): string {
+  return `<!-- tag:${tag.name} color:${tag.color} -->`;
 }

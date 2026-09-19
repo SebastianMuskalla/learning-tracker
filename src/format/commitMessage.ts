@@ -30,6 +30,16 @@ export function commitMessage(command: Command, item: Item | undefined): string 
       return `Reorder ${SECTION_LABELS[command.section]}`;
     case 'delete':
       return `Delete "${headline}"`;
+    case 'createTag':
+      return `Create tag "${command.name}"`;
+    case 'setTagColor':
+      return `Recolor tag "${command.name}"`;
+    case 'deleteTag':
+      return `Delete tag "${command.name}"`;
+    case 'tagItem':
+      return `Tag "${headline}" with "${command.tag}"`;
+    case 'untagItem':
+      return `Untag "${headline}" from "${command.tag}"`;
   }
 }
 

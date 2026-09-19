@@ -3,12 +3,11 @@
 // throw one side away (see doc/requirement-1-concurrency.md, phase 3).
 import { itemsEqual, validateBoard } from './board';
 import { err, ok, type Result } from './result';
-import { allItems, sectionOf, type Board, type Item, type ItemId, type Section } from './types';
+import { allItems, sectionOf, type Board, type Item, type ItemId, type Section, type Tag, type TagName } from './types';
 
-export interface MergeConflict {
-  readonly type: 'DivergentEdit';
-  readonly id: ItemId;
-}
+export type MergeConflict =
+  | { readonly type: 'DivergentEdit'; readonly id: ItemId }
+  | { readonly type: 'DivergentTagEdit'; readonly name: TagName };
 
 const SECTION_ORDER: readonly Section[] = ['new', 'wip', 'complete', 'discarded'];
 
@@ -22,14 +21,26 @@ const SECTION_ORDER: readonly Section[] = ['new', 'wip', 'complete', 'discarded'
  * Ordering follows `remote`, with local-only additions inserted at their local position.
  */
 export function merge(base: Board, local: Board, remote: Board): Result<Board, MergeConflict> {
+  const mergedTags = mergeTags(base.tags, local.tags, remote.tags);
+  if (!mergedTags.ok) return mergedTags;
+
   const merged = mergeItems(base, local, remote);
   if (!merged.ok) return merged;
+
+  // A tag deleted on either side (relative to base) drops out of mergedTags above; strip it from
+  // any item that still names it, so "deleted here, item tagged with it there" never conflicts.
+  const mergedTagNames = new Set(mergedTags.value.map((tag) => tag.name));
+  const strippedItems = merged.value.map((item) =>
+    item.tags.every((name) => mergedTagNames.has(name))
+      ? item
+      : { ...item, tags: item.tags.filter((name) => mergedTagNames.has(name)) },
+  );
 
   const newItems: Item[] = [];
   const wipItems: Item[] = [];
   const completeItems: Item[] = [];
   const discardedItems: Item[] = [];
-  for (const item of merged.value) {
+  for (const item of strippedItems) {
     switch (sectionOf(item)) {
       case 'new':
         newItems.push(item);
@@ -47,6 +58,7 @@ export function merge(base: Board, local: Board, remote: Board): Result<Board, M
   }
 
   const board: Board = {
+    tags: orderTags(mergedTags.value, remote, local),
     new: orderSection(newItems, remote, local).filter(isActive),
     wip: orderSection(wipItems, remote, local).filter(isActive),
     complete: orderSection(completeItems, remote, local).filter(isComplete),
@@ -118,6 +130,95 @@ function resolveItem(
 
 function itemMap(board: Board): Map<ItemId, Item> {
   return new Map(allItems(board).map((item) => [item.id, item]));
+}
+
+function mergeTags(
+  base: readonly Tag[],
+  local: readonly Tag[],
+  remote: readonly Tag[],
+): Result<readonly Tag[], MergeConflict> {
+  const baseTags = tagMap(base);
+  const localTags = tagMap(local);
+  const remoteTags = tagMap(remote);
+  const allNames = new Set<TagName>([...baseTags.keys(), ...localTags.keys(), ...remoteTags.keys()]);
+
+  const merged: Tag[] = [];
+  for (const name of allNames) {
+    const resolved = resolveTag(name, baseTags.get(name), localTags.get(name), remoteTags.get(name));
+    if (!resolved.ok) return resolved;
+    if (resolved.value !== null) merged.push(resolved.value);
+  }
+  return ok(merged);
+}
+
+function resolveTag(
+  name: TagName,
+  base: Tag | undefined,
+  local: Tag | undefined,
+  remote: Tag | undefined,
+): Result<Tag | null, MergeConflict> {
+  if (base === undefined) {
+    // Not in the common ancestor: a create on one or both sides.
+    if (local !== undefined && remote !== undefined) {
+      return local.color === remote.color ? ok(local) : err({ type: 'DivergentTagEdit', name });
+    }
+    return ok(local ?? remote ?? null);
+  }
+
+  // In the common ancestor: a delete on either side wins, regardless of a recolor on the other.
+  if (local === undefined || remote === undefined) return ok(null);
+
+  const localChanged = local.color !== base.color;
+  const remoteChanged = remote.color !== base.color;
+  if (!localChanged && !remoteChanged) return ok(base);
+  if (localChanged && !remoteChanged) return ok(local);
+  if (!localChanged && remoteChanged) return ok(remote);
+  return local.color === remote.color ? ok(local) : err({ type: 'DivergentTagEdit', name });
+}
+
+function tagMap(tags: readonly Tag[]): Map<TagName, Tag> {
+  return new Map(tags.map((tag) => [tag.name, tag]));
+}
+
+/** Orders the merged tag list following `remote`, with local-only additions spliced in right
+ *  after their nearest local predecessor that made it into the result — the same approach as
+ *  `orderSection`, but keyed by tag name instead of item id. */
+function orderTags(tags: readonly Tag[], remote: Board, local: Board): Tag[] {
+  const remoteOrder = remote.tags.map((tag) => tag.name);
+  const localOrder = local.tags.map((tag) => tag.name);
+  const remoteRank = new Map(remoteOrder.map((name, index) => [name, index]));
+  const localRank = new Map(localOrder.map((name, index) => [name, index]));
+  const byName = new Map(tags.map((tag) => [tag.name, tag]));
+
+  const inRemote = tags
+    .filter((tag) => remoteRank.has(tag.name))
+    .sort((a, b) => (remoteRank.get(a.name) ?? 0) - (remoteRank.get(b.name) ?? 0));
+  const localOnly = tags
+    .filter((tag) => !remoteRank.has(tag.name))
+    .sort((a, b) => (localRank.get(a.name) ?? 0) - (localRank.get(b.name) ?? 0));
+
+  const resultNames: TagName[] = inRemote.map((tag) => tag.name);
+
+  for (const tag of localOnly) {
+    const myLocalRank = localRank.get(tag.name) ?? 0;
+    let insertAt = 0;
+    for (let i = myLocalRank - 1; i >= 0; i -= 1) {
+      const candidateName = localOrder[i];
+      if (candidateName === undefined) continue;
+      const idx = resultNames.indexOf(candidateName);
+      if (idx !== -1) {
+        insertAt = idx + 1;
+        break;
+      }
+    }
+    resultNames.splice(insertAt, 0, tag.name);
+  }
+
+  return resultNames.map((name) => {
+    const tag = byName.get(name);
+    if (tag === undefined) throw new Error(`merge: missing tag for name ${name}`);
+    return tag;
+  });
 }
 
 function concatenatedOrder(board: Board): readonly ItemId[] {

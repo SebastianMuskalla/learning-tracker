@@ -23,6 +23,9 @@
 
   --search-highlight: rgba(250, 204, 21, 0.55);
 
+  /* Tag chips are always pastel, so the same dark ink reads well on them in both themes. */
+  --tag-ink: #1d1b18;
+
   color-scheme: light dark;
 }
 

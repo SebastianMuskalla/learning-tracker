@@ -37,6 +37,7 @@ const SECTIONS: readonly { readonly key: Section; readonly title: string }[] = [
               <li v-for="item in local[s.key]" :key="item.id">{{ item.headline }}</li>
             </ul>
           </div>
+          <p class="tags-line">Tags: {{ local.tags.map((t) => t.name).join(', ') || '—' }}</p>
         </section>
 
         <section class="version">
@@ -47,6 +48,7 @@ const SECTIONS: readonly { readonly key: Section; readonly title: string }[] = [
               <li v-for="item in remote[s.key]" :key="item.id">{{ item.headline }}</li>
             </ul>
           </div>
+          <p class="tags-line">Tags: {{ remote.tags.map((t) => t.name).join(', ') || '—' }}</p>
         </section>
       </div>
 
@@ -131,6 +133,12 @@ h2 {
   margin: 0;
   padding-left: 1.1rem;
   font-size: 0.85rem;
+}
+
+.tags-line {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .actions {

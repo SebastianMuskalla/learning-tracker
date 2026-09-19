@@ -23,6 +23,12 @@ const getFile = client.getFile as ReturnType<typeof vi.fn>;
 const putFile = client.putFile as ReturnType<typeof vi.fn>;
 const parseSpy = parseModule.parse as ReturnType<typeof vi.fn>;
 
+function callOrder(mockFn: ReturnType<typeof vi.fn>, index: number): number {
+  const order = mockFn.mock.invocationCallOrder[index];
+  if (order === undefined) throw new Error(`expected a recorded call at index ${String(index)}`);
+  return order;
+}
+
 function setup(): { board: ReturnType<typeof useBoardStore>; settings: ReturnType<typeof useSettingsStore> } {
   setActivePinia(createPinia());
   const settings = useSettingsStore();
@@ -112,6 +118,66 @@ describe('load', () => {
     expect(getFile).not.toHaveBeenCalled();
     expect(board.board.new.map((i) => i.headline)).toEqual(['Mine']);
     vi.useRealTimers();
+  });
+
+  it('load() with pending work: flushes the pending batch (one putFile) before the reload read, and the reload reflects it', async () => {
+    const { board } = setup();
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(emptyBoard()), sha: 'sha-1' } });
+    await board.load();
+
+    putFile.mockResolvedValueOnce({ ok: true, value: { sha: 'sha-2' } });
+    vi.useFakeTimers();
+    await board.applyAndSync({ type: 'add', headline: 'Mine' as never });
+    expect(board.syncStatus).toBe('pending');
+    expect(putFile).not.toHaveBeenCalled();
+
+    const reloaded = applyCommand(emptyBoard(), { type: 'add', headline: 'Mine' as never });
+    if (!reloaded.ok) throw new Error('unexpected domain error building test fixture');
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(reloaded.value), sha: 'sha-3' } });
+
+    await board.load();
+
+    expect(putFile).toHaveBeenCalledTimes(1);
+    expect(getFile).toHaveBeenCalledTimes(2);
+    const putOrder = callOrder(putFile, 0);
+    const reloadGetOrder = callOrder(getFile, 1);
+    expect(putOrder).toBeLessThan(reloadGetOrder);
+    expect(board.board.new.map((i) => i.headline)).toEqual(['Mine']);
+    expect(board.sha).toBe('sha-3');
+    vi.useRealTimers();
+  });
+});
+
+describe('flushNow', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('writes immediately and resolves after the write', async () => {
+    const { board } = setup();
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(emptyBoard()), sha: 'sha-1' } });
+    await board.load();
+
+    putFile.mockResolvedValueOnce({ ok: true, value: { sha: 'sha-2' } });
+    vi.useFakeTimers();
+    await board.applyAndSync({ type: 'add', headline: 'Mine' as never });
+    expect(putFile).not.toHaveBeenCalled();
+
+    await board.flushNow();
+
+    expect(putFile).toHaveBeenCalledTimes(1);
+    expect(board.syncStatus).toBe('saved');
+    expect(board.sha).toBe('sha-2');
+  });
+
+  it('does nothing when there is no pending work', async () => {
+    const { board } = setup();
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(emptyBoard()), sha: 'sha-1' } });
+    await board.load();
+
+    await board.flushNow();
+
+    expect(putFile).not.toHaveBeenCalled();
   });
 });
 

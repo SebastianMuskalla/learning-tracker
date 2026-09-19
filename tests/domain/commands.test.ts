@@ -4,8 +4,10 @@ import { applyCommand, type Command } from '../../src/domain/commands';
 import {
   generateItemId,
   makeHeadline,
+  makeHexColor,
   makeIsoTimestamp,
   makeOptionalDescription,
+  makeTagName,
 } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
 import type { Board } from '../../src/domain/types';
@@ -21,6 +23,14 @@ function description(text: string) {
   const value = unwrap(makeOptionalDescription(text));
   if (value === null) throw new Error('expected a non-empty description in this test');
   return value;
+}
+
+function tagName(text: string) {
+  return unwrap(makeTagName(text));
+}
+
+function hexColor(text: string) {
+  return unwrap(makeHexColor(text));
 }
 
 function run(board: Board, command: Command, now = DAY_1): Board {
@@ -45,6 +55,7 @@ describe('add', () => {
       status: 'active',
       description: null,
       createdAt: DAY_1,
+      tags: [],
     });
   });
 
@@ -132,6 +143,19 @@ describe('complete / uncomplete', () => {
     const result = applyCommand(board, { type: 'uncomplete', id });
     expect(result).toEqual({ ok: false, error: { type: 'WrongStatus', id, expected: 'complete' } });
   });
+
+  it('keeps the item\'s tags across complete and uncomplete', () => {
+    const vue = tagName('vue');
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    const id = first(board.new).id;
+    board = run(board, { type: 'createTag', name: vue, color: hexColor('#aacbee') });
+    board = run(board, { type: 'tagItem', id, tag: vue });
+    board = run(board, { type: 'setDescription', id, description: description('notes') });
+    board = run(board, { type: 'complete', id }, DAY_2);
+    expect(first(board.complete).tags).toEqual([vue]);
+    board = run(board, { type: 'uncomplete', id });
+    expect(first(board.wip).tags).toEqual([vue]);
+  });
 });
 
 describe('discard / restore', () => {
@@ -156,6 +180,7 @@ describe('discard / restore', () => {
       status: 'discarded',
       description: 'notes',
       discardedAt: DAY_2,
+      tags: [],
     });
   });
 
@@ -182,6 +207,122 @@ describe('discard / restore', () => {
 
     expect(board.new.map((i) => i.id)).toContain(bareId);
     expect(board.wip.map((i) => i.id)).toContain(describedId);
+  });
+
+  it('keeps the item\'s tags across discard and restore', () => {
+    const vue = tagName('vue');
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    const id = first(board.new).id;
+    board = run(board, { type: 'createTag', name: vue, color: hexColor('#aacbee') });
+    board = run(board, { type: 'tagItem', id, tag: vue });
+    board = run(board, { type: 'discard', id });
+    expect(first(board.discarded).tags).toEqual([vue]);
+    board = run(board, { type: 'restore', id });
+    expect(first(board.new).tags).toEqual([vue]);
+  });
+});
+
+describe('tags', () => {
+  it('createTag appends the tag; the items are the same objects as before', () => {
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    const itemsBefore = board.new;
+    board = run(board, { type: 'createTag', name: tagName('vue'), color: hexColor('#aacbee') });
+    expect(board.tags).toEqual([{ name: 'vue', color: '#aacbee' }]);
+    expect(board.new).toBe(itemsBefore);
+
+    board = run(board, { type: 'createTag', name: tagName('rust'), color: hexColor('#f6c9a4') });
+    expect(board.tags).toEqual([
+      { name: 'vue', color: '#aacbee' },
+      { name: 'rust', color: '#f6c9a4' },
+    ]);
+  });
+
+  it('createTag rejects a duplicate name, ignoring case', () => {
+    const board = run(emptyBoard(), { type: 'createTag', name: tagName('vue'), color: hexColor('#aacbee') });
+    const result = applyCommand(board, { type: 'createTag', name: tagName('Vue'), color: hexColor('#f6c9a4') });
+    expect(result).toEqual({ ok: false, error: { type: 'TagAlreadyExists', name: 'Vue' } });
+  });
+
+  it('setTagColor replaces only the color', () => {
+    let board = run(emptyBoard(), { type: 'createTag', name: tagName('vue'), color: hexColor('#aacbee') });
+    board = run(board, { type: 'setTagColor', name: tagName('vue'), color: hexColor('#f6c9a4') });
+    expect(board.tags).toEqual([{ name: 'vue', color: '#f6c9a4' }]);
+  });
+
+  it('setTagColor rejects an unknown tag name', () => {
+    const board = emptyBoard();
+    const result = applyCommand(board, { type: 'setTagColor', name: tagName('vue'), color: hexColor('#aacbee') });
+    expect(result).toEqual({ ok: false, error: { type: 'TagNotFound', name: 'vue' } });
+  });
+
+  it('deleteTag removes the definition and the name from items in every section, leaving other tags in place', () => {
+    const vue = tagName('vue');
+    const rust = tagName('rust');
+    let board = run(emptyBoard(), { type: 'createTag', name: vue, color: hexColor('#aacbee') });
+    board = run(board, { type: 'createTag', name: rust, color: hexColor('#f6c9a4') });
+
+    board = run(board, { type: 'add', headline: headline('Active') });
+    const activeId = first(board.new).id;
+    board = run(board, { type: 'tagItem', id: activeId, tag: vue });
+    board = run(board, { type: 'tagItem', id: activeId, tag: rust });
+
+    board = run(board, { type: 'add', headline: headline('Discarded') });
+    const discardedId = first(board.new).id;
+    board = run(board, { type: 'tagItem', id: discardedId, tag: vue });
+    board = run(board, { type: 'discard', id: discardedId });
+
+    board = run(board, { type: 'deleteTag', name: vue });
+
+    expect(board.tags).toEqual([{ name: 'rust', color: '#f6c9a4' }]);
+    const activeItem = board.new.find((item) => item.id === activeId);
+    expect(activeItem?.tags).toEqual([rust]);
+    const discarded = board.discarded.find((item) => item.id === discardedId);
+    expect(discarded?.tags).toEqual([]);
+  });
+
+  it('deleteTag rejects an unknown tag name', () => {
+    const result = applyCommand(emptyBoard(), { type: 'deleteTag', name: tagName('vue') });
+    expect(result).toEqual({ ok: false, error: { type: 'TagNotFound', name: 'vue' } });
+  });
+
+  it('tagItem inserts in definition order regardless of click order', () => {
+    const a = tagName('a');
+    const b = tagName('b');
+    let board = run(emptyBoard(), { type: 'createTag', name: a, color: hexColor('#aacbee') });
+    board = run(board, { type: 'createTag', name: b, color: hexColor('#f6c9a4') });
+    board = run(board, { type: 'add', headline: headline('Topic') });
+    const id = first(board.new).id;
+
+    board = run(board, { type: 'tagItem', id, tag: b });
+    board = run(board, { type: 'tagItem', id, tag: a });
+
+    expect(first(board.new).tags).toEqual([a, b]);
+  });
+
+  it('tagItem rejects an unknown tag and a tag already on the item', () => {
+    let board = run(emptyBoard(), { type: 'createTag', name: tagName('vue'), color: hexColor('#aacbee') });
+    board = run(board, { type: 'add', headline: headline('Topic') });
+    const id = first(board.new).id;
+
+    const unknown = applyCommand(board, { type: 'tagItem', id, tag: tagName('rust') });
+    expect(unknown).toEqual({ ok: false, error: { type: 'TagNotFound', name: 'rust' } });
+
+    board = run(board, { type: 'tagItem', id, tag: tagName('vue') });
+    const again = applyCommand(board, { type: 'tagItem', id, tag: tagName('vue') });
+    expect(again).toEqual({ ok: false, error: { type: 'TagAlreadyOnItem', id, name: 'vue' } });
+  });
+
+  it('untagItem removes the tag; rejects a tag not on the item', () => {
+    let board = run(emptyBoard(), { type: 'createTag', name: tagName('vue'), color: hexColor('#aacbee') });
+    board = run(board, { type: 'add', headline: headline('Topic') });
+    const id = first(board.new).id;
+    board = run(board, { type: 'tagItem', id, tag: tagName('vue') });
+
+    board = run(board, { type: 'untagItem', id, tag: tagName('vue') });
+    expect(first(board.new).tags).toEqual([]);
+
+    const result = applyCommand(board, { type: 'untagItem', id, tag: tagName('vue') });
+    expect(result).toEqual({ ok: false, error: { type: 'TagNotOnItem', id, name: 'vue' } });
   });
 });
 
@@ -232,6 +373,8 @@ describe('unknown item', () => {
       { type: 'discard', id: missing },
       { type: 'restore', id: missing },
       { type: 'delete', id: missing },
+      { type: 'tagItem', id: missing, tag: tagName('vue') },
+      { type: 'untagItem', id: missing, tag: tagName('vue') },
     ];
     for (const command of commands) {
       expect(applyCommand(board, command)).toEqual({

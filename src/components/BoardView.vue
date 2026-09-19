@@ -2,18 +2,21 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
 import { allItems, findItemById } from '../domain/types';
-import type { Board, ItemId, Section } from '../domain/types';
+import type { Board, ItemId, Section, TagName } from '../domain/types';
 import { itemMatches } from '../search/match';
 import { searchShortcutAction } from '../search/shortcut';
 import { useBoardStore } from '../store/board';
 import { useSearchStore } from '../store/search';
 import { useSettingsStore } from '../store/settings';
+import { useTagFilterStore } from '../store/tagFilter';
+import { itemHasAnyTag } from '../tags/filter';
 import ConflictBanner from './ConflictBanner.vue';
 import ItemDetailDrawer from './ItemDetailDrawer.vue';
 import ParseErrorBanner from './ParseErrorBanner.vue';
 import SearchBar from './SearchBar.vue';
 import SectionColumn from './SectionColumn.vue';
 import SyncStatusOverlay from './SyncStatusOverlay.vue';
+import TagFilterBar from './TagFilterBar.vue';
 import TopBar from './TopBar.vue';
 
 const emit = defineEmits<{ openSettings: [reason?: string] }>();
@@ -21,6 +24,7 @@ const emit = defineEmits<{ openSettings: [reason?: string] }>();
 const settings = useSettingsStore();
 const boardStore = useBoardStore();
 const searchStore = useSearchStore();
+const tagFilterStore = useTagFilterStore();
 
 const topBar = ref<{ focusAddInput: () => void } | null>(null);
 const searchBar = ref<{ focus: () => void; hasFocus: () => boolean } | null>(null);
@@ -33,12 +37,25 @@ const fileUrl = computed(
   () => `https://github.com/${settings.owner}/${settings.repo}/blob/${settings.branch}/${settings.path}`,
 );
 
-function filterSection<T extends { headline: string; description: string | null }>(items: readonly T[]): T[] {
-  if (!searchStore.isActive) return [...items];
-  return items.filter((item) => itemMatches(item, searchStore.term));
+// Stale names (a tag deleted or renamed by hand since the filter was set) are ignored here, so a
+// stored name that no longer exists on the board never hides items.
+const effectiveActiveTags = computed(
+  () => new Set([...tagFilterStore.activeNames].filter((name) => boardStore.board.tags.some((t) => t.name === name))),
+);
+const isTagFilterActive = computed(() => effectiveActiveTags.value.size > 0);
+
+function filterSection<T extends { headline: string; description: string | null; tags: readonly TagName[] }>(
+  items: readonly T[],
+): T[] {
+  return items.filter((item) => {
+    if (searchStore.isActive && !itemMatches(item, searchStore.term)) return false;
+    if (isTagFilterActive.value && !itemHasAnyTag(item, effectiveActiveTags.value)) return false;
+    return true;
+  });
 }
 
 const visibleBoard = computed<Board>(() => ({
+  tags: boardStore.board.tags,
   new: filterSection(boardStore.board.new),
   wip: filterSection(boardStore.board.wip),
   complete: filterSection(boardStore.board.complete),
@@ -47,6 +64,7 @@ const visibleBoard = computed<Board>(() => ({
 
 const totalCount = computed(() => allItems(boardStore.board).length);
 const matchCount = computed(() => allItems(visibleBoard.value).length);
+const anyFilterActive = computed(() => searchStore.isActive || isTagFilterActive.value);
 
 onMounted(() => {
   void boardStore.load();
@@ -161,6 +179,16 @@ function onSetDescription(id: ItemId, text: string): void {
   if (!result.ok) return;
   void boardStore.applyAndSync({ type: 'setDescription', id, description: result.value });
 }
+
+function onToggleTag(id: ItemId, tag: TagName): void {
+  const item = findItemById(boardStore.board, id);
+  if (!item) return;
+  if (item.tags.includes(tag)) {
+    void boardStore.applyAndSync({ type: 'untagItem', id, tag });
+  } else {
+    void boardStore.applyAndSync({ type: 'tagItem', id, tag });
+  }
+}
 </script>
 
 <template>
@@ -181,12 +209,17 @@ function onSetDescription(id: ItemId, text: string): void {
       </button>
     </div>
 
-    <main v-else class="columns">
+    <TagFilterBar v-if="!boardStore.fileNotFound && boardStore.board.tags.length > 0" :tags="boardStore.board.tags" />
+
+    <main v-if="!boardStore.fileNotFound" class="columns">
       <SectionColumn
         title="New"
         section="new"
         :items="visibleBoard.new"
-        :drag-disabled="searchStore.isActive"
+        :total-count="boardStore.board.new.length"
+        :drag-disabled="anyFilterActive"
+        :filter-active="anyFilterActive"
+        :tags="boardStore.board.tags"
         @reorder="(f: number, t: number) => onReorder('new', f, t)"
         @select="onSelect"
         @edit-headline="onEditHeadline"
@@ -195,7 +228,10 @@ function onSetDescription(id: ItemId, text: string): void {
         title="WIP"
         section="wip"
         :items="visibleBoard.wip"
-        :drag-disabled="searchStore.isActive"
+        :total-count="boardStore.board.wip.length"
+        :drag-disabled="anyFilterActive"
+        :filter-active="anyFilterActive"
+        :tags="boardStore.board.tags"
         @reorder="(f: number, t: number) => onReorder('wip', f, t)"
         @select="onSelect"
         @complete="onComplete"
@@ -205,7 +241,10 @@ function onSetDescription(id: ItemId, text: string): void {
         title="Complete"
         section="complete"
         :items="visibleBoard.complete"
-        :drag-disabled="searchStore.isActive"
+        :total-count="boardStore.board.complete.length"
+        :drag-disabled="anyFilterActive"
+        :filter-active="anyFilterActive"
+        :tags="boardStore.board.tags"
         @reorder="(f: number, t: number) => onReorder('complete', f, t)"
         @select="onSelect"
         @edit-headline="onEditHeadline"
@@ -214,7 +253,10 @@ function onSetDescription(id: ItemId, text: string): void {
         title="Discarded"
         section="discarded"
         :items="visibleBoard.discarded"
-        :drag-disabled="searchStore.isActive"
+        :total-count="boardStore.board.discarded.length"
+        :drag-disabled="anyFilterActive"
+        :filter-active="anyFilterActive"
+        :tags="boardStore.board.tags"
         @reorder="(f: number, t: number) => onReorder('discarded', f, t)"
         @select="onSelect"
         @edit-headline="onEditHeadline"
@@ -224,6 +266,7 @@ function onSetDescription(id: ItemId, text: string): void {
     <ItemDetailDrawer
       v-if="selectedItem"
       :item="selectedItem"
+      :tags="boardStore.board.tags"
       @close="selectedId = null"
       @edit-headline="(h: string) => onEditHeadline(selectedItem!.id, h)"
       @set-description="(d: string) => onSetDescription(selectedItem!.id, d)"
@@ -232,6 +275,7 @@ function onSetDescription(id: ItemId, text: string): void {
       @discard="onDiscard(selectedItem!.id)"
       @restore="onRestore(selectedItem!.id)"
       @delete="onDelete(selectedItem!.id)"
+      @toggle-tag="(tag: TagName) => onToggleTag(selectedItem!.id, tag)"
     />
 
     <ConflictBanner
@@ -290,6 +334,10 @@ function onSetDescription(id: ItemId, text: string): void {
   padding: 1rem;
   display: grid;
   grid-template-columns: 1fr;
+  /* Without this, Grid's default align-content stretches the row tracks to fill any leftover
+   * vertical space in this flex:1 container, inflating short columns (e.g. once a filter leaves
+   * one or few items) well past their content height. */
+  align-content: start;
   gap: 1rem;
   max-width: 48rem;
   margin: 0 auto;

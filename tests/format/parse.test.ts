@@ -26,7 +26,7 @@ describe('parse — valid files', () => {
     const result = parse(fixture('empty.md'));
     expect(result).toEqual({
       ok: true,
-      value: { board: { new: [], wip: [], complete: [], discarded: [] }, warnings: [] },
+      value: { board: { tags: [], new: [], wip: [], complete: [], discarded: [] }, warnings: [] },
     });
   });
 
@@ -65,6 +65,21 @@ describe('parse — valid files', () => {
     ]);
   });
 
+  it('parses tag definitions in file order, and items with zero, one, and two tags', () => {
+    const result = parse(fixture('tags.md'));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.board.tags).toEqual([
+      { name: 'vue', color: '#aacbee' },
+      { name: 'rust', color: '#f6c9a4' },
+    ]);
+    expect(result.value.board.new).toMatchObject([
+      { headline: 'No tags', tags: [] },
+      { headline: 'One tag', tags: ['vue'] },
+      { headline: 'Two tags', tags: ['vue', 'rust'] },
+    ]);
+  });
+
   it('warns, but does not fail, when an active item sits under the wrong New/WIP heading', () => {
     const text = fixture('empty.md').replace(
       '## New\n',
@@ -91,6 +106,12 @@ describe('parse — invalid files', () => {
     'malformed-meta.md',
     'both-completed-and-discarded.md',
     'bad-header.md',
+    'unknown-tag-on-item.md',
+    'duplicate-tag-definition.md',
+    'invalid-tag-color.md',
+    'invalid-tag-name.md',
+    'duplicate-tag-on-item.md',
+    'tag-definition-after-new.md',
   ];
 
   for (const name of invalidFixtures) {

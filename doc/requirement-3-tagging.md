@@ -1,6 +1,6 @@
 # Requirement 3: Tags
 
-Status: analysis and plan. Nothing is implemented yet.
+Status: implemented.
 
 ## 1. What is asked
 

@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { VueDraggable, type DraggableEvent } from 'vue-draggable-plus';
 import { ref, watch } from 'vue';
-import type { Item, ItemId, Section } from '../domain/types';
+import type { Item, ItemId, Section, Tag } from '../domain/types';
 import ItemCard from './ItemCard.vue';
 
-const { items, dragDisabled } = defineProps<{
+const { items, totalCount, filterActive, tags, dragDisabled } = defineProps<{
   readonly title: string;
   readonly section: Section;
   readonly items: readonly Item[];
+  readonly totalCount: number;
+  /** Whether a search or tag filter is currently active — determines the "x of y" header style
+   *  even for a column the filter happens not to narrow. */
+  readonly filterActive: boolean;
+  /** The board's tag definitions, passed through to each card to resolve its tag colors. */
+  readonly tags: readonly Tag[];
   readonly dragDisabled: boolean;
 }>();
 
@@ -39,7 +45,9 @@ function onUpdate(event: DraggableEvent<Item>): void {
   <section class="column" :class="section">
     <div class="column-header">
       <h2>{{ title }}</h2>
-      <span class="count">{{ items.length }}</span>
+      <span class="count" aria-live="polite">
+        {{ filterActive ? `${items.length} of ${totalCount}` : items.length }}
+      </span>
     </div>
 
     <VueDraggable
@@ -57,6 +65,7 @@ function onUpdate(event: DraggableEvent<Item>): void {
         :key="item.id"
         :item="item"
         :section="section"
+        :tags="tags"
         @select="emit('select', item.id)"
         @complete="emit('complete', item.id)"
         @edit-headline="(headline: string) => emit('editHeadline', item.id, headline)"

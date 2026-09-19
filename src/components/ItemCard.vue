@@ -5,11 +5,13 @@ import { renderMarkdown } from '../markdown/render';
 import { markHits } from '../search/markDom';
 import { normalize, splitIntoSegments } from '../search/match';
 import { useSearchStore } from '../store/search';
-import type { Item, Section } from '../domain/types';
+import type { Item, Section, Tag } from '../domain/types';
 
-const { item, section } = defineProps<{
+const { item, section, tags } = defineProps<{
   readonly item: Item;
   readonly section: Section;
+  /** The board's tag definitions, used only to look up each of this item's tag colors. */
+  readonly tags: readonly Tag[];
 }>();
 
 const emit = defineEmits<{
@@ -17,6 +19,8 @@ const emit = defineEmits<{
   complete: [];
   editHeadline: [headline: string];
 }>();
+
+const itemTags = computed(() => tags.filter((tag) => item.tags.includes(tag.name)));
 
 const searchStore = useSearchStore();
 
@@ -124,6 +128,21 @@ function cancelEdit(): void {
       <p v-if="showDescHint" class="desc-hint">Also matches in the description (not visible in this preview)</p>
     </div>
 
+    <div
+      v-if="itemTags.length > 0"
+      class="tag-dots"
+      role="img"
+      :aria-label="`Tags: ${itemTags.map((t) => t.name).join(', ')}`"
+    >
+      <span
+        v-for="tag in itemTags"
+        :key="tag.name"
+        class="tag-dot"
+        :style="{ '--tag-color': tag.color }"
+        :title="tag.name"
+      ></span>
+    </div>
+
     <div class="actions" @click.stop>
       <button v-if="section === 'wip'" title="Complete" @click="emit('complete')">
         <i class="fa-solid fa-check" aria-hidden="true"></i>
@@ -197,6 +216,24 @@ function cancelEdit(): void {
   font-size: 0.75rem;
   font-style: italic;
   color: var(--text-muted);
+}
+
+.tag-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  /* .card aligns its children to the top by default; center this one instead, so the dots stay
+   * centered even when the card grows taller (e.g. a multi-line description preview). */
+  align-self: center;
+}
+
+.tag-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--tag-color);
 }
 
 .actions {

@@ -145,6 +145,33 @@ matches the search only further down, or only in a link's target rather
 than its visible text, the card shows a short note that it still matches, so
 you know to open it.
 
+## Tags
+
+A tag is one word (letters, digits, `_`, or `-`) and one of 16 pastel colors.
+Each topic can have any number of tags, including none.
+
+You create, recolor, and delete tags on the settings page, in the **Tags**
+section. Creating a tag does not change any topic. Deleting a tag removes
+it from every topic that has it, after you confirm; the confirmation shows
+how many topics are affected. A tag's color can be changed at any time.
+
+In a topic's detail view, tags appear as chips above the description. A
+chip in full color is on the topic; a grayed-out chip is not. Click a chip
+to add or remove that tag.
+
+At the top of the board, below the header bar, all tags appear as chips.
+Click a chip to make it active (highlighted) or inactive (its normal look);
+several chips can be active at once. While at least one tag is active, only
+topics with at least one active tag are shown, and each column's count
+reads "x of y" (y is the column's full count, x is how many are shown). The
+same "x of y" style applies while searching, for the same reason. Dragging
+to reorder is paused while a tag filter is active, for the same reason it
+pauses during a search.
+
+Which tags are active is remembered by your browser (not stored in
+`learning.md`), so it survives a reload but is not shared between devices
+or with anyone you share the repository with.
+
 ### Token storage modes
 
 | Mode                        | Where the token is kept                                                        | Use it when                                                   |
@@ -187,14 +214,16 @@ shows a parse error. It will not guess what you meant. This protects your
 data: a typo should cause a clear error, not silent data loss.
 
 ```
-file        := header section('New') section('WIP') section('Complete') section('Discarded')
+file        := header tagdef* blank* section('New') section('WIP') section('Complete') section('Discarded')
 header      := '# Learning' NL blank* '<!-- learning-tracker: v1 — …' NL blank*
+tagdef      := '<!-- tag:' NAME ' color:#' HEX6 ' -->' NL blank*
 section(S)  := '## ' S NL blank* item*
 item        := '### ' headline NL
                '<!-- ' meta (' ' meta)* ' -->' NL
                desc?
                blank*
 meta        := 'id:' ULID | 'created:' TIMESTAMP | 'completed:' TIMESTAMP | 'discarded:' TIMESTAMP
+             | 'tags:' NAME (',' NAME)*
 desc        := '<!-- desc -->' NL rawline* '<!-- /desc -->' NL
 rawline     := any line that is not exactly '<!-- /desc -->'
 blank       := an empty line (outside desc blocks)
@@ -226,6 +255,15 @@ Rules for hand edits:
   the full form.
 - The app always writes line endings as `\n`. It also accepts `\r\n` when
   it reads a file, and converts them.
+- A tag `NAME` is letters, digits, `_`, or `-`, 1 to 32 characters (Unicode
+  letters and digits are allowed, so `Übung` and `日本語` are valid names).
+  No spaces, commas, or `<!--`.
+- Every tag listed in a topic's `tags:` must be defined by a `tagdef` line
+  above the first section. A tag name that is not defined is an error, not
+  a silent drop — this keeps a hand-typed tag from being lost by accident.
+- A file with no `tagdef` lines and no `tags:` parts is still a valid file:
+  this is exactly what every file looked like before tags existed, and
+  every such topic is read as having no tags.
 
 Before every save, the app reads back what it is about to write and
 compares it with its own in-memory data. If the two do not match exactly,
@@ -291,5 +329,6 @@ can never throw away work you have not saved yet.
 
 ## Future ideas
 
-- Tags
+- Remove passphrase / other code simplifications
 - Syntax highlighting for languages
+- Code review

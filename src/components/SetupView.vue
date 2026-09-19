@@ -1,13 +1,20 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { makeHexColor, makeTagName } from '../domain/factories';
+import { allItems, type HexColor, type Tag, type TagName } from '../domain/types';
 import { getFile } from '../github/client';
+import { useBoardStore } from '../store/board';
 import { useSettingsStore } from '../store/settings';
 import type { TokenStorageMode } from '../store/settings';
+import { TAG_PALETTE } from '../tags/palette';
+import ColorSwatchPicker from './ColorSwatchPicker.vue';
+import TagChip from './TagChip.vue';
 
 const { reason = null } = defineProps<{ readonly reason?: string | null }>();
 const emit = defineEmits<{ done: [] }>();
 
 const settings = useSettingsStore();
+const boardStore = useBoardStore();
 
 const closable = computed(() => settings.isReady && !settings.needsPassphrase);
 
@@ -18,8 +25,84 @@ const historyUrl = computed(
   () => `https://github.com/${settings.owner}/${settings.repo}/commits/${settings.branch}/${settings.path}`,
 );
 
+const tagsBlockVisible = computed(
+  () => closable.value && boardStore.sha !== null && boardStore.canWrite && !boardStore.fileNotFound,
+);
+const tagsParseErrorVisible = computed(
+  () => closable.value && boardStore.sha !== null && !boardStore.fileNotFound && !boardStore.canWrite,
+);
+
+const colorPickerOpenFor = ref<TagName | null>(null);
+const deleteTarget = ref<Tag | null>(null);
+const newTagName = ref('');
+const newTagError = ref('');
+
+const [firstPaletteColor] = TAG_PALETTE;
+if (firstPaletteColor === undefined) throw new Error('TAG_PALETTE must not be empty');
+
+const defaultNewTagColor = computed<HexColor>(() => {
+  const usedColors = new Set(boardStore.board.tags.map((t) => t.color));
+  return (TAG_PALETTE.find((p) => !usedColors.has(p.color)) ?? firstPaletteColor).color;
+});
+const newTagColor = ref<HexColor>(defaultNewTagColor.value);
+watch(defaultNewTagColor, (next) => {
+  newTagColor.value = next;
+});
+
+function usageCount(name: TagName): number {
+  return allItems(boardStore.board).filter((item) => item.tags.includes(name)).length;
+}
+
+function usageLabel(name: TagName): string {
+  const count = usageCount(name);
+  return count === 1 ? 'used by 1 item' : `used by ${String(count)} items`;
+}
+
+const deleteConfirmText = computed(() => {
+  if (!deleteTarget.value) return '';
+  const count = usageCount(deleteTarget.value.name);
+  if (count === 0) return 'No item uses it.';
+  if (count === 1) return 'It is used by 1 item. It will lose this tag.';
+  return `It is used by ${String(count)} items. They will lose this tag.`;
+});
+
+function addTag(): void {
+  newTagError.value = '';
+  const result = makeTagName(newTagName.value);
+  if (!result.ok) {
+    newTagError.value = 'Enter a tag name: letters, digits, "_" or "-", up to 32 characters.';
+    return;
+  }
+  const name = result.value;
+  if (boardStore.board.tags.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
+    newTagError.value = `A tag named "${name}" already exists.`;
+    return;
+  }
+  void boardStore.applyAndSync({ type: 'createTag', name, color: newTagColor.value });
+  newTagName.value = '';
+}
+
+function recolorTag(tag: Tag, color: string): void {
+  colorPickerOpenFor.value = null;
+  if (color === tag.color) return;
+  const result = makeHexColor(color);
+  if (!result.ok) return;
+  void boardStore.applyAndSync({ type: 'setTagColor', name: tag.name, color: result.value });
+}
+
+function confirmDeleteTag(): void {
+  if (!deleteTarget.value) return;
+  void boardStore.applyAndSync({ type: 'deleteTag', name: deleteTarget.value.name });
+  deleteTarget.value = null;
+}
+
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && closable.value) {
+  if (event.key !== 'Escape') return;
+  if (deleteTarget.value !== null) {
+    deleteTarget.value = null;
+    return;
+  }
+  if (closable.value) {
     emit('done');
   }
 }
@@ -87,6 +170,10 @@ async function save(): Promise<void> {
     saveError.value = 'A token is required on first setup.';
     return;
   }
+
+  // Write any pending batch to the repository it was made for before possibly switching to a
+  // different one below (see doc/requirement-3-tagging.md, section 3.7).
+  await boardStore.flushNow();
 
   settings.updateRepoSettings({
     owner: owner.value.trim(),
@@ -175,6 +262,59 @@ function describeError(type: string): string {
           <a :href="historyUrl" target="_blank" rel="noopener noreferrer">View file history</a>
         </div>
 
+        <section v-if="tagsBlockVisible" class="tags-block">
+          <h2>Tags</h2>
+
+          <ul class="tag-list">
+            <li v-for="tag in boardStore.board.tags" :key="tag.name" class="tag-row">
+              <TagChip :name="tag.name" :color="tag.color" mode="normal" />
+              <span class="tag-usage">{{ usageLabel(tag.name) }}</span>
+              <button
+                type="button"
+                class="icon-button"
+                title="Change color"
+                :aria-label="`Change color of tag ${tag.name}`"
+                @click="colorPickerOpenFor = colorPickerOpenFor === tag.name ? null : tag.name"
+              >
+                <i class="fa-solid fa-palette" aria-hidden="true"></i>
+              </button>
+              <button
+                type="button"
+                class="icon-button danger"
+                title="Delete tag"
+                :aria-label="`Delete tag ${tag.name}`"
+                @click="deleteTarget = tag"
+              >
+                <i class="fa-solid fa-trash" aria-hidden="true"></i>
+              </button>
+              <ColorSwatchPicker
+                v-if="colorPickerOpenFor === tag.name"
+                class="inline-picker"
+                :model-value="tag.color"
+                @update:model-value="(c) => recolorTag(tag, c)"
+              />
+            </li>
+          </ul>
+
+          <div class="new-tag">
+            <input
+              v-model="newTagName"
+              type="text"
+              maxlength="32"
+              pattern="[\p{L}\p{N}_-]{1,32}"
+              aria-label="New tag name"
+              placeholder="New tag name"
+              @keyup.enter="addTag"
+            />
+            <ColorSwatchPicker v-model="newTagColor" />
+            <button type="button" class="ghost" @click="addTag">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i> Add
+            </button>
+          </div>
+          <p v-if="newTagError" class="error">{{ newTagError }}</p>
+        </section>
+        <p v-else-if="tagsParseErrorVisible" class="hint">Fix learning.md before editing tags.</p>
+
         <label>
           Owner
           <input v-model="owner" placeholder="your-github-username" autocomplete="off" />
@@ -228,6 +368,21 @@ function describeError(type: string): string {
         <p v-if="testMessage" :class="testState === 'error' ? 'error' : 'ok'">{{ testMessage }}</p>
         <p v-if="saveError" class="error">{{ saveError }}</p>
       </template>
+    </div>
+
+    <div v-if="deleteTarget" class="confirm-overlay">
+      <div class="confirm-dialog">
+        <h4>Delete tag "{{ deleteTarget.name }}"?</h4>
+        <p>{{ deleteConfirmText }}</p>
+        <div class="confirm-actions">
+          <button class="ghost" @click="deleteTarget = null">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i> Cancel
+          </button>
+          <button class="danger" @click="confirmDeleteTag">
+            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete tag
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -357,5 +512,127 @@ button.ghost {
 .ok {
   color: var(--accent);
   font-size: 0.9rem;
+}
+
+.tags-block {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 0;
+  margin-bottom: 1rem;
+}
+
+.tags-block h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.tag-list {
+  list-style: none;
+  margin: 0 0 0.8rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.tag-usage {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 2em;
+  height: 2em;
+  color: var(--text);
+  margin-left: auto;
+}
+
+.icon-button.danger {
+  color: var(--danger);
+  margin-left: 0;
+}
+
+.inline-picker {
+  flex-basis: 100%;
+  margin-top: 0.4rem;
+}
+
+.new-tag {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.new-tag input {
+  flex: 1 1 10rem;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 100;
+}
+
+.confirm-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.2rem;
+  max-width: 34rem;
+  width: 100%;
+}
+
+.confirm-dialog h4 {
+  margin: 0 0 0.5rem;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.confirm-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.confirm-actions button.ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4em 0.9em;
+  color: var(--text);
+}
+
+.confirm-actions button.danger {
+  background: var(--danger);
+  color: var(--accent-contrast);
+  border: none;
+  border-radius: 6px;
+  padding: 0.4em 0.9em;
 }
 </style>

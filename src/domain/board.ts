@@ -1,13 +1,16 @@
 import { err, ok, type Result } from './result';
-import { allItems, sectionOf, type Board, type Item } from './types';
+import { allItems, sectionOf, type Board, type Item, type Tag, type TagName } from './types';
 
 export type BoardValidationError =
   | { readonly type: 'DuplicateId'; readonly id: string }
   | { readonly type: 'MisplacedItem'; readonly id: string; readonly expectedSection: string }
-  | { readonly type: 'ActiveItemInWrongArray'; readonly id: string };
+  | { readonly type: 'ActiveItemInWrongArray'; readonly id: string }
+  | { readonly type: 'DuplicateTagName'; readonly name: string }
+  | { readonly type: 'UndefinedItemTag'; readonly id: string; readonly name: string }
+  | { readonly type: 'DuplicateItemTag'; readonly id: string; readonly name: string };
 
 export function emptyBoard(): Board {
-  return { new: [], wip: [], complete: [], discarded: [] };
+  return { tags: [], new: [], wip: [], complete: [], discarded: [] };
 }
 
 export function validateBoard(board: Board): Result<Board, BoardValidationError> {
@@ -17,6 +20,29 @@ export function validateBoard(board: Board): Result<Board, BoardValidationError>
       return err({ type: 'DuplicateId', id: item.id });
     }
     seen.add(item.id);
+  }
+
+  const seenTagNamesLower = new Set<string>();
+  for (const tag of board.tags) {
+    const lower = tag.name.toLowerCase();
+    if (seenTagNamesLower.has(lower)) {
+      return err({ type: 'DuplicateTagName', name: tag.name });
+    }
+    seenTagNamesLower.add(lower);
+  }
+
+  const definedTagNames = new Set<TagName>(board.tags.map((tag) => tag.name));
+  for (const item of allItems(board)) {
+    const seenItemTags = new Set<TagName>();
+    for (const name of item.tags) {
+      if (!definedTagNames.has(name)) {
+        return err({ type: 'UndefinedItemTag', id: item.id, name });
+      }
+      if (seenItemTags.has(name)) {
+        return err({ type: 'DuplicateItemTag', id: item.id, name });
+      }
+      seenItemTags.add(name);
+    }
   }
 
   for (const item of board.new) {
@@ -53,11 +79,22 @@ export { sectionOf };
 
 export function boardsEqual(a: Board, b: Board): boolean {
   return (
+    tagListsEqual(a.tags, b.tags) &&
     itemListsEqual(a.new, b.new) &&
     itemListsEqual(a.wip, b.wip) &&
     itemListsEqual(a.complete, b.complete) &&
     itemListsEqual(a.discarded, b.discarded)
   );
+}
+
+function tagListsEqual(a: readonly Tag[], b: readonly Tag[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((tag, index) => tag.name === b[index]?.name && tag.color === b[index].color);
+}
+
+function tagArraysEqual(a: readonly TagName[], b: readonly TagName[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((name, index) => name === b[index]);
 }
 
 function itemListsEqual(a: readonly Item[], b: readonly Item[]): boolean {
@@ -71,6 +108,7 @@ export function itemsEqual(a: Item, b: Item | undefined): boolean {
   if (a.id !== b.id || a.headline !== b.headline || a.createdAt !== b.createdAt || a.description !== b.description) {
     return false;
   }
+  if (!tagArraysEqual(a.tags, b.tags)) return false;
   if (a.status === 'complete' && b.status === 'complete') return a.completedAt === b.completedAt;
   if (a.status === 'discarded' && b.status === 'discarded') return a.discardedAt === b.discardedAt;
   return true;

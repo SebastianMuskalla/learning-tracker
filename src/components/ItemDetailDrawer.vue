@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
-import { sectionOf, type Item, type Section } from '../domain/types';
+import { sectionOf, type Item, type Section, type Tag, type TagName } from '../domain/types';
 import { formatTimestamp } from '../format/displayTimestamp';
 import { highlightCodeBlocks, renderMarkdown } from '../markdown/render';
 import { markHits } from '../search/markDom';
 import { useSearchStore } from '../store/search';
+import TagChip from './TagChip.vue';
 
-const { item } = defineProps<{ readonly item: Item }>();
+const { item, tags } = defineProps<{ readonly item: Item; readonly tags: readonly Tag[] }>();
 
 const emit = defineEmits<{
   close: [];
@@ -18,6 +19,7 @@ const emit = defineEmits<{
   discard: [];
   restore: [];
   delete: [];
+  toggleTag: [tag: TagName];
 }>();
 
 const SECTION_LABEL: Record<Section, string> = {
@@ -159,6 +161,21 @@ function onKeydown(event: KeyboardEvent): void {
         <dd>{{ formatTimestamp(item.discardedAt) }}</dd>
       </template>
     </dl>
+
+    <div class="tags">
+      <template v-if="tags.length > 0">
+        <TagChip
+          v-for="tag in tags"
+          :key="tag.name"
+          :name="tag.name"
+          :color="tag.color"
+          :mode="item.tags.includes(tag.name) ? 'normal' : 'muted'"
+          interactive
+          @click="emit('toggleTag', tag.name)"
+        />
+      </template>
+      <p v-else class="hint">No tags yet — create tags in the settings.</p>
+    </div>
 
     <h3>Description</h3>
     <!-- eslint-disable vue/no-v-html -- renderedHtml is DOMPurify-sanitized in markdown/render.ts -->
@@ -305,6 +322,20 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .dates dd {
+  margin: 0;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.8rem 0;
+}
+
+.tags .hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
   margin: 0;
 }
 

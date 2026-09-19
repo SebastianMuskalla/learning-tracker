@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   generateItemId,
   makeHeadline,
+  makeHexColor,
   makeIsoTimestamp,
   makeItemId,
   makeOptionalDescription,
+  makeTagName,
   nowTimestamp,
 } from '../../src/domain/factories';
 
@@ -76,6 +78,60 @@ describe('nowTimestamp', () => {
     const ts = nowTimestamp();
     expect(ts).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
     expect(makeIsoTimestamp(ts)).toEqual({ ok: true, value: ts });
+  });
+});
+
+describe('makeTagName', () => {
+  it('accepts letters, digits, underscore, hyphen, and non-Latin scripts', () => {
+    expect(makeTagName('vue')).toEqual({ ok: true, value: 'vue' });
+    expect(makeTagName('c-sharp')).toEqual({ ok: true, value: 'c-sharp' });
+    expect(makeTagName('web_dev')).toEqual({ ok: true, value: 'web_dev' });
+    expect(makeTagName('Übung')).toEqual({ ok: true, value: 'Übung' });
+    expect(makeTagName('日本語')).toEqual({ ok: true, value: '日本語' });
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(makeTagName('  vue  ')).toEqual({ ok: true, value: 'vue' });
+  });
+
+  it('rejects an empty name', () => {
+    expect(makeTagName('   ').ok).toBe(false);
+  });
+
+  it('rejects a name with a space inside', () => {
+    expect(makeTagName('web dev').ok).toBe(false);
+  });
+
+  it('rejects a name containing a comma', () => {
+    expect(makeTagName('vue,rust').ok).toBe(false);
+  });
+
+  it('rejects a name containing a comment marker', () => {
+    expect(makeTagName('<!--').ok).toBe(false);
+  });
+
+  it('rejects a name longer than 32 characters', () => {
+    expect(makeTagName('a'.repeat(33)).ok).toBe(false);
+    expect(makeTagName('a'.repeat(32)).ok).toBe(true);
+  });
+});
+
+describe('makeHexColor', () => {
+  it('accepts a 6-digit hex color, keeping the case as given', () => {
+    expect(makeHexColor('#aacbee')).toEqual({ ok: true, value: '#aacbee' });
+    expect(makeHexColor('#AACBEE')).toEqual({ ok: true, value: '#AACBEE' });
+  });
+
+  it('rejects a color without a leading #', () => {
+    expect(makeHexColor('aacbee').ok).toBe(false);
+  });
+
+  it('rejects a 3-digit shorthand color', () => {
+    expect(makeHexColor('#abc').ok).toBe(false);
+  });
+
+  it('rejects non-hex digits', () => {
+    expect(makeHexColor('#gggggg').ok).toBe(false);
   });
 });
 

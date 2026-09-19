@@ -97,9 +97,18 @@ export const useBoardStore = defineStore('board', () => {
     return queue;
   }
 
-  /** Always goes through the queue, so a load can never interleave with a write in flight. */
+  /** Always goes through the queue, so a load can never interleave with a write in flight.
+   *  Flushes any pending local work first, so a reload can never throw it away. */
   function load(): Promise<void> {
-    return enqueue(() => performLoad());
+    return enqueue(async () => {
+      await flushPending();
+      await performLoad();
+    });
+  }
+
+  /** Writes any pending local batch immediately, without waiting for the debounce to settle. */
+  function flushNow(): Promise<void> {
+    return enqueue(() => flushPending());
   }
 
   /** Like `load`, but skips itself if there is unwritten local work, so it can never clobber it. */
@@ -461,6 +470,14 @@ export const useBoardStore = defineStore('board', () => {
         return 'That item is already discarded.';
       case 'InvalidReorderIndex':
         return 'Reorder failed: index out of range.';
+      case 'TagAlreadyExists':
+        return `A tag named "${error.name}" already exists.`;
+      case 'TagNotFound':
+        return `Tag "${error.name}" no longer exists.`;
+      case 'TagAlreadyOnItem':
+        return 'That item already has this tag.';
+      case 'TagNotOnItem':
+        return 'That item does not have this tag.';
     }
   }
 
@@ -487,6 +504,7 @@ export const useBoardStore = defineStore('board', () => {
     hasUnsavedWork,
     load,
     refresh,
+    flushNow,
     initializeEmptyFile,
     applyAndSync,
     flushBeforeUnload,

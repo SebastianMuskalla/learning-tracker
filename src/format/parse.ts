@@ -1,4 +1,11 @@
-import { makeHeadline, makeIsoTimestamp, makeItemId, makeOptionalDescription } from '../domain/factories';
+import {
+  makeHeadline,
+  makeHexColor,
+  makeIsoTimestamp,
+  makeItemId,
+  makeOptionalDescription,
+  makeTagName,
+} from '../domain/factories';
 import { err, ok, type Result } from '../domain/result';
 import { validateBoard } from '../domain/board';
 import type {
@@ -11,6 +18,8 @@ import type {
   Item,
   ItemId,
   Section,
+  Tag,
+  TagName,
 } from '../domain/types';
 import { DESC_END, DESC_START, HEADER_COMMENT, HEADER_TITLE } from './serialize';
 
@@ -40,8 +49,9 @@ const SECTION_SEQUENCE: readonly { readonly section: Section; readonly heading: 
 // date-only format (`2026-09-16`) written before this app tracked time; see makeIsoTimestamp.
 const TS = String.raw`\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?`;
 const META_RE = new RegExp(
-  `^<!-- id:([0-9A-Za-z]{26}) created:(${TS})(?: completed:(${TS}))?(?: discarded:(${TS}))? -->$`,
+  `^<!-- id:([0-9A-Za-z]{26}) created:(${TS})(?: completed:(${TS}))?(?: discarded:(${TS}))?(?: tags:(\\S+))? -->$`,
 );
+const TAG_DEF_RE = /^<!-- tag:(\S+) color:(\S+) -->$/;
 
 class Cursor {
   private index = 0;
@@ -87,6 +97,10 @@ export function parse(text: string): Result<ParseSuccess, ParseError> {
   const headerResult = parseHeader(cursor);
   if (!headerResult.ok) return headerResult;
 
+  const tagsResult = parseTagDefinitions(cursor);
+  if (!tagsResult.ok) return tagsResult;
+  const tags = tagsResult.value;
+
   const warnings: ParseWarning[] = [];
   const seenIds = new Set<string>();
   const acc: Accumulator = { new: [], wip: [], complete: [], discarded: [] };
@@ -103,7 +117,7 @@ export function parse(text: string): Result<ParseSuccess, ParseError> {
     cursor.skipBlankLines();
 
     while (cursor.peek()?.startsWith('### ') === true) {
-      const itemResult = parseItem(cursor, section);
+      const itemResult = parseItem(cursor, section, tags);
       if (!itemResult.ok) return itemResult;
       const { item, warning } = itemResult.value;
 
@@ -126,13 +140,47 @@ export function parse(text: string): Result<ParseSuccess, ParseError> {
     });
   }
 
-  const board: Board = { new: acc.new, wip: acc.wip, complete: acc.complete, discarded: acc.discarded };
+  const board: Board = { tags, new: acc.new, wip: acc.wip, complete: acc.complete, discarded: acc.discarded };
   const validated = validateBoard(board);
   if (!validated.ok) {
     return err({ line: 0, reason: `Internal consistency check failed: ${JSON.stringify(validated.error)}` });
   }
 
   return ok({ board, warnings });
+}
+
+function parseTagDefinitions(cursor: Cursor): Result<readonly Tag[], ParseError> {
+  const tags: Tag[] = [];
+  const seenLower = new Set<string>();
+  for (;;) {
+    cursor.skipBlankLines();
+    const line = cursor.peek();
+    if (line === undefined) break;
+    const match = TAG_DEF_RE.exec(line);
+    if (!match) break;
+    const lineNumber = cursor.lineNumber;
+    cursor.advance();
+
+    const rawName = match[1] ?? '';
+    const rawColor = match[2] ?? '';
+    const nameResult = makeTagName(rawName);
+    if (!nameResult.ok) {
+      return err({ line: lineNumber, reason: `Invalid tag name: ${JSON.stringify(nameResult.error)}` });
+    }
+    const colorResult = makeHexColor(rawColor);
+    if (!colorResult.ok) {
+      return err({ line: lineNumber, reason: `Invalid tag color: ${JSON.stringify(colorResult.error)}` });
+    }
+
+    const name = nameResult.value;
+    const lower = name.toLowerCase();
+    if (seenLower.has(lower)) {
+      return err({ line: lineNumber, reason: `Duplicate tag "${name}"` });
+    }
+    seenLower.add(lower);
+    tags.push({ name, color: colorResult.value });
+  }
+  return ok(tags);
 }
 
 function parseHeader(cursor: Cursor): Result<void, ParseError> {
@@ -161,7 +209,41 @@ interface ParsedItem {
   readonly warning: ParseWarning | undefined;
 }
 
-function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, ParseError> {
+function parseItemTags(
+  rawTags: string | undefined,
+  definedTags: readonly Tag[],
+  headline: string,
+  line: number,
+): Result<readonly TagName[], ParseError> {
+  if (rawTags === undefined) return ok([]);
+
+  const definedLower = new Set(definedTags.map((tag) => tag.name.toLowerCase()));
+  const seenLower = new Set<string>();
+  const tags: TagName[] = [];
+  for (const raw of rawTags.split(',')) {
+    const nameResult = makeTagName(raw);
+    if (!nameResult.ok) {
+      return err({ line, reason: `Invalid tag on item "${headline}": ${JSON.stringify(nameResult.error)}` });
+    }
+    const name = nameResult.value;
+    const lower = name.toLowerCase();
+    if (seenLower.has(lower)) {
+      return err({ line, reason: `Duplicate tag "${name}" on item "${headline}"` });
+    }
+    seenLower.add(lower);
+    if (!definedLower.has(lower)) {
+      return err({ line, reason: `Unknown tag "${name}" on item "${headline}"` });
+    }
+    tags.push(name);
+  }
+  return ok(tags);
+}
+
+function parseItem(
+  cursor: Cursor,
+  fileSection: Section,
+  definedTags: readonly Tag[],
+): Result<ParsedItem, ParseError> {
   const headlineLine = cursor.advance();
   if (headlineLine === undefined) {
     return err({ line: cursor.lineNumber, reason: 'Unexpected end of file while reading an item headline' });
@@ -190,6 +272,7 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
   const rawCreated = match[2] ?? '';
   const rawCompleted = match[3];
   const rawDiscarded = match[4];
+  const rawTags = match[5];
 
   const idResult = makeItemId(rawId);
   if (!idResult.ok) {
@@ -234,13 +317,17 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
     });
   }
 
+  const headline = headlineResult.value;
+  const tagsResult = parseItemTags(rawTags, definedTags, headline, cursor.lineNumber - 1);
+  if (!tagsResult.ok) return tagsResult;
+  const tags = tagsResult.value;
+
   const descResult = parseOptionalDescription(cursor);
   if (!descResult.ok) return descResult;
   const description = descResult.value;
 
   const id: ItemId = idResult.value;
   const createdAt: IsoTimestamp = createdResult.value;
-  const headline = headlineResult.value;
 
   if (discardedAt !== undefined) {
     if (fileSection !== 'discarded') {
@@ -249,7 +336,15 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
         reason: 'Item with discarded: metadata found outside the Discarded section',
       });
     }
-    const item: DiscardedItem = { id, headline, createdAt, status: 'discarded', description, discardedAt };
+    const item: DiscardedItem = {
+      id,
+      headline,
+      createdAt,
+      status: 'discarded',
+      description,
+      discardedAt,
+      tags,
+    };
     return ok({ item, warning: undefined });
   }
 
@@ -263,7 +358,15 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
     if (description === null) {
       return err({ line: cursor.lineNumber, reason: 'A Complete item must have a description' });
     }
-    const item: CompleteItem = { id, headline, createdAt, status: 'complete', description, completedAt };
+    const item: CompleteItem = {
+      id,
+      headline,
+      createdAt,
+      status: 'complete',
+      description,
+      completedAt,
+      tags,
+    };
     return ok({ item, warning: undefined });
   }
 
@@ -274,7 +377,7 @@ function parseItem(cursor: Cursor, fileSection: Section): Result<ParsedItem, Par
     });
   }
 
-  const item: ActiveItem = { id, headline, createdAt, status: 'active', description };
+  const item: ActiveItem = { id, headline, createdAt, status: 'active', description, tags };
   const expectedSection: Section = description === null ? 'new' : 'wip';
   const warning: ParseWarning | undefined =
     expectedSection === fileSection
