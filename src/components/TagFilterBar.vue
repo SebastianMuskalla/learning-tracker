@@ -26,6 +26,7 @@ const tagFilterStore = useTagFilterStore();
 .tag-filter-bar {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.4rem;
   padding: 0.75rem 1rem;
   max-width: 48rem;

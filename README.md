@@ -323,5 +323,4 @@ can never throw away work you have not saved yet.
 - Syntax highlighting for languages
 - Code review
 - Fold sections
-- Center list of tags
 - Dark Mode
