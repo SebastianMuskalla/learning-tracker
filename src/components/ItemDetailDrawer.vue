@@ -182,7 +182,7 @@ function onKeydown(event: KeyboardEvent): void {
     <div
       v-if="!descriptionEditing"
       ref="staticPreviewEl"
-      class="preview preview-static"
+      class="preview preview-static markdown-rich"
       title="Click to edit"
       @click="descriptionEditing = true"
       v-html="renderedHtml"
@@ -197,7 +197,7 @@ function onKeydown(event: KeyboardEvent): void {
           @blur="saveDescription"
         />
         <!-- eslint-disable-next-line vue/no-v-html -- renderedHtml is DOMPurify-sanitized in markdown/render.ts -->
-        <div ref="livePreviewEl" class="preview" v-html="renderedHtml" />
+        <div ref="livePreviewEl" class="preview markdown-rich" v-html="renderedHtml" />
       </div>
       <div class="desc-actions">
         <button class="primary" @click="saveDescription">
@@ -390,13 +390,6 @@ h3 {
 .preview-static {
   margin-top: 0.5rem;
   cursor: text;
-}
-
-.preview :deep(pre) {
-  overflow-x: auto;
-  background: var(--surface);
-  padding: 0.6rem;
-  border-radius: 6px;
 }
 
 .desc-actions {

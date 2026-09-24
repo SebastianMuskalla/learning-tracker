@@ -41,7 +41,8 @@ Status: analysis and plan. Nothing is implemented yet.
   — the edit mode. It shows the headline in an `<input>` and the description
   either as a static rendered preview or as a textarea next to a live
   preview. After each render it runs `highlightCodeBlocks` (highlight.js) on
-  the preview DOM.
+  the preview DOM. It only highlights blocks with a known language and skips
+  blocks that are already highlighted, so it is safe to call again.
 - [`src/markdown/render.ts`](../src/markdown/render.ts) — `renderMarkdown`
   (markdown-it + DOMPurify) and `highlightCodeBlocks`.
 - [`src/components/SyncStatusOverlay.vue`](../src/components/SyncStatusOverlay.vue)

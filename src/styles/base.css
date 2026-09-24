@@ -31,6 +31,23 @@
 
   /* Tag chips are always pastel, so the same dark ink reads well on them in both themes. */
   --tag-ink: #1d1b18;
+
+  /* Code blocks in a rendered description. The syntax colors follow GitHub's light and dark
+   * themes, adjusted so each one has a contrast of at least 4.5:1 against --code-bg. */
+  --code-bg: light-dark(#f3f1ec, #1a1916);
+  --code-border: light-dark(#e4e0d8, #2e2b27);
+  --syn-keyword: light-dark(#cf222e, #ff7b72);
+  --syn-title: light-dark(#6f42c1, #d2a8ff);
+  --syn-constant: light-dark(#0550ae, #79c0ff);
+  --syn-string: light-dark(#0a3069, #a5d6ff);
+  --syn-builtin: light-dark(#953800, #ffa657);
+  --syn-comment: light-dark(#57606a, #8b949e);
+  --syn-name: light-dark(#116329, #7ee787);
+  --syn-bullet: light-dark(#6f5a0a, #f2cc60);
+  --syn-addition: light-dark(#116329, #aff5b4);
+  --syn-addition-bg: light-dark(#dafbe1, #033a16);
+  --syn-deletion: light-dark(#82071e, #ffdcd7);
+  --syn-deletion-bg: light-dark(#ffebe9, #67060c);
 }
 
 :root[data-theme='light'] {
@@ -114,6 +131,113 @@ mark.search-hit {
   color: inherit;
   border-radius: 2px;
   padding: 0 0.1em;
+}
+
+/* Code blocks in a rendered description (see src/markdown/render.ts). These live here, not in a
+ * component's scoped styles, because the blocks come from `v-html` and highlight.js. They only
+ * apply inside `.markdown-rich`, so the small card previews keep plain code. */
+.markdown-rich .code-block {
+  margin: 0.8em 0;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* The language label. It is drawn from `data-lang` so it is not part of the text. */
+.markdown-rich .code-block[data-lang]::before {
+  content: attr(data-lang);
+  display: block;
+  padding: 0.2rem 0.6rem;
+  border-bottom: 1px solid var(--code-border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.markdown-rich .code-block pre {
+  margin: 0;
+  padding: 0.6rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+.markdown-rich .hljs-keyword,
+.markdown-rich .hljs-doctag,
+.markdown-rich .hljs-template-tag,
+.markdown-rich .hljs-template-variable,
+.markdown-rich .hljs-type,
+.markdown-rich .hljs-variable.language_ {
+  color: var(--syn-keyword);
+}
+
+.markdown-rich .hljs-title,
+.markdown-rich .hljs-title.class_,
+.markdown-rich .hljs-title.function_ {
+  color: var(--syn-title);
+}
+
+.markdown-rich .hljs-attr,
+.markdown-rich .hljs-attribute,
+.markdown-rich .hljs-literal,
+.markdown-rich .hljs-meta,
+.markdown-rich .hljs-number,
+.markdown-rich .hljs-operator,
+.markdown-rich .hljs-variable,
+.markdown-rich .hljs-selector-attr,
+.markdown-rich .hljs-selector-class,
+.markdown-rich .hljs-selector-id {
+  color: var(--syn-constant);
+}
+
+.markdown-rich .hljs-regexp,
+.markdown-rich .hljs-string,
+.markdown-rich .hljs-meta .hljs-string {
+  color: var(--syn-string);
+}
+
+.markdown-rich .hljs-built_in,
+.markdown-rich .hljs-symbol {
+  color: var(--syn-builtin);
+}
+
+.markdown-rich .hljs-comment,
+.markdown-rich .hljs-code,
+.markdown-rich .hljs-formula {
+  color: var(--syn-comment);
+}
+
+.markdown-rich .hljs-name,
+.markdown-rich .hljs-quote,
+.markdown-rich .hljs-selector-tag,
+.markdown-rich .hljs-selector-pseudo {
+  color: var(--syn-name);
+}
+
+.markdown-rich .hljs-section {
+  color: var(--syn-constant);
+  font-weight: bold;
+}
+
+.markdown-rich .hljs-bullet {
+  color: var(--syn-bullet);
+}
+
+.markdown-rich .hljs-emphasis {
+  font-style: italic;
+}
+
+.markdown-rich .hljs-strong {
+  font-weight: bold;
+}
+
+.markdown-rich .hljs-addition {
+  color: var(--syn-addition);
+  background: var(--syn-addition-bg);
+}
+
+.markdown-rich .hljs-deletion {
+  color: var(--syn-deletion);
+  background: var(--syn-deletion-bg);
 }
 
 #app {

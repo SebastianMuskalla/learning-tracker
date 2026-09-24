@@ -148,6 +148,31 @@ active; the count then reads "x of y" as usual.
 Which sections are collapsed is not saved anywhere. After a reload, all
 sections are expanded again.
 
+## Code in descriptions
+
+Descriptions are Markdown. In an item's detail view, a code block is shown
+in a box with a slightly tinted background. To get syntax highlighting, name
+the language after the opening fence:
+
+````md
+```python
+print("hello")
+```
+````
+
+The box then shows the language's name at the top (e.g. `ts` shows as
+"TypeScript"), and the code is colored. The colors match the light or dark
+theme. About 35 common languages are supported, e.g. JavaScript, TypeScript,
+Python, Java, C, C++, C#, Go, Rust, Kotlin, Swift, SQL, Bash, JSON, YAML,
+HTML/XML, and CSS (the "common" set of
+[highlight.js](https://highlightjs.org/)).
+
+- A code block without a language gets the box, but no label and no colors.
+  The app does not guess the language.
+- A code block with a language that is not supported gets the box and the
+  label, but no colors.
+- The card previews on the board show code as plain text, without a box.
+
 ## Search
 
 A floating search bar sits in the bottom-left corner of the board, next to
@@ -346,5 +371,4 @@ can never throw away work you have not saved yet.
 
 ## Future ideas
 
-- Syntax highlighting for languages
 - Code review
