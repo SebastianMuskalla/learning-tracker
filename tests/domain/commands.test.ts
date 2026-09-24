@@ -144,7 +144,7 @@ describe('complete / uncomplete', () => {
     expect(result).toEqual({ ok: false, error: { type: 'WrongStatus', id, expected: 'complete' } });
   });
 
-  it('keeps the item\'s tags across complete and uncomplete', () => {
+  it("keeps the item's tags across complete and uncomplete", () => {
     const vue = tagName('vue');
     let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
     const id = first(board.new).id;
@@ -209,7 +209,7 @@ describe('discard / restore', () => {
     expect(board.wip.map((i) => i.id)).toContain(describedId);
   });
 
-  it('keeps the item\'s tags across discard and restore', () => {
+  it("keeps the item's tags across discard and restore", () => {
     const vue = tagName('vue');
     let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
     const id = first(board.new).id;
@@ -239,7 +239,11 @@ describe('tags', () => {
 
   it('createTag rejects a duplicate name, ignoring case', () => {
     const board = run(emptyBoard(), { type: 'createTag', name: tagName('vue'), color: hexColor('#aacbee') });
-    const result = applyCommand(board, { type: 'createTag', name: tagName('Vue'), color: hexColor('#f6c9a4') });
+    const result = applyCommand(board, {
+      type: 'createTag',
+      name: tagName('Vue'),
+      color: hexColor('#f6c9a4'),
+    });
     expect(result).toEqual({ ok: false, error: { type: 'TagAlreadyExists', name: 'Vue' } });
   });
 
@@ -251,7 +255,11 @@ describe('tags', () => {
 
   it('setTagColor rejects an unknown tag name', () => {
     const board = emptyBoard();
-    const result = applyCommand(board, { type: 'setTagColor', name: tagName('vue'), color: hexColor('#aacbee') });
+    const result = applyCommand(board, {
+      type: 'setTagColor',
+      name: tagName('vue'),
+      color: hexColor('#aacbee'),
+    });
     expect(result).toEqual({ ok: false, error: { type: 'TagNotFound', name: 'vue' } });
   });
 

@@ -50,7 +50,9 @@ defineExpose({ focus, hasFocus });
       placeholder="Search (Ctrl+F)"
       @keydown="onKeydown"
     />
-    <span v-if="searchStore.isActive" class="count" aria-live="polite">{{ matchCount }} out of {{ totalCount }} items</span>
+    <span v-if="searchStore.isActive" class="count" aria-live="polite"
+      >{{ matchCount }} out of {{ totalCount }} items</span
+    >
     <button v-if="searchStore.isActive" class="clear" title="Clear search" @click="clear">
       <i class="fa-solid fa-xmark" aria-hidden="true"></i>
     </button>

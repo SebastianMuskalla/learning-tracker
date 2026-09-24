@@ -105,7 +105,12 @@ function itemListsEqual(a: readonly Item[], b: readonly Item[]): boolean {
 /** Exported for the merge algorithm, which also needs to compare two items for equality. */
 export function itemsEqual(a: Item, b: Item | undefined): boolean {
   if (b?.status !== a.status) return false;
-  if (a.id !== b.id || a.headline !== b.headline || a.createdAt !== b.createdAt || a.description !== b.description) {
+  if (
+    a.id !== b.id ||
+    a.headline !== b.headline ||
+    a.createdAt !== b.createdAt ||
+    a.description !== b.description
+  ) {
     return false;
   }
   if (!tagArraysEqual(a.tags, b.tags)) return false;

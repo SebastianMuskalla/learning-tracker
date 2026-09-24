@@ -58,7 +58,10 @@ describe('validateBoard', () => {
     const item = activeItem({ tags: [vue.name] });
     const board: Board = { ...emptyBoard(), new: [item] };
     const result = validateBoard(board);
-    expect(result).toMatchObject({ ok: false, error: { type: 'UndefinedItemTag', id: item.id, name: 'vue' } });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { type: 'UndefinedItemTag', id: item.id, name: 'vue' },
+    });
   });
 
   it('rejects two tag definitions with the same name, ignoring case', () => {
@@ -72,7 +75,10 @@ describe('validateBoard', () => {
     const item = activeItem({ tags: [vue.name, vue.name] });
     const board: Board = { ...emptyBoard(), tags: [vue], new: [item] };
     const result = validateBoard(board);
-    expect(result).toMatchObject({ ok: false, error: { type: 'DuplicateItemTag', id: item.id, name: 'vue' } });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { type: 'DuplicateItemTag', id: item.id, name: 'vue' },
+    });
   });
 });
 

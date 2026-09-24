@@ -54,6 +54,8 @@ button.chip.muted:hover {
 
 .chip.active {
   font-weight: 600;
-  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--text);
 }
 </style>

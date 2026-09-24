@@ -24,7 +24,11 @@ export async function getFile(config: GithubRepoConfig): Promise<Result<FileCont
 
   const body = (await response.value.json()) as GithubContentsGetResponse;
   if (body.encoding !== 'base64') {
-    return err({ type: 'Unknown', status: response.value.status, message: `Unexpected encoding "${body.encoding}"` });
+    return err({
+      type: 'Unknown',
+      status: response.value.status,
+      message: `Unexpected encoding "${body.encoding}"`,
+    });
   }
   return ok({ text: decodeBase64Utf8(body.content), sha: body.sha });
 }
@@ -58,7 +62,11 @@ export async function putFile(
   const body = (await response.value.json()) as GithubContentsPutResponse;
   const sha = body.content?.sha;
   if (!sha) {
-    return err({ type: 'Unknown', status: response.value.status, message: 'PUT response had no content.sha' });
+    return err({
+      type: 'Unknown',
+      status: response.value.status,
+      message: 'PUT response had no content.sha',
+    });
   }
   return ok({ sha });
 }

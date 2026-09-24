@@ -23,9 +23,12 @@ const item: ActiveItem = {
 
 describe('commitMessage — tags', () => {
   it('createTag', () => {
-    expect(commitMessage({ type: 'createTag', name: unwrap(makeTagName('vue')), color: unwrap(makeHexColor('#aacbee')) }, undefined)).toBe(
-      'Create tag "vue"',
-    );
+    expect(
+      commitMessage(
+        { type: 'createTag', name: unwrap(makeTagName('vue')), color: unwrap(makeHexColor('#aacbee')) },
+        undefined,
+      ),
+    ).toBe('Create tag "vue"');
   });
 
   it('setTagColor', () => {

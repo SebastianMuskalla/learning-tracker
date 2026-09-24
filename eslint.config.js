@@ -20,7 +20,8 @@ export default defineConfigWithVueTs(
         'error',
         {
           selector: 'TSAsExpression',
-          message: 'Avoid `as` casts outside src/domain/factories.ts; use a validated factory or type narrowing instead.',
+          message:
+            'Avoid `as` casts outside src/domain/factories.ts; use a validated factory or type narrowing instead.',
         },
       ],
     },

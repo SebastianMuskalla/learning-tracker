@@ -35,7 +35,9 @@ const descriptionPreviewHtml = computed(() =>
 );
 
 const headlineSegments = computed(() =>
-  searchStore.isActive ? splitIntoSegments(item.headline, searchStore.term) : [{ text: item.headline, hit: false }],
+  searchStore.isActive
+    ? splitIntoSegments(item.headline, searchStore.term)
+    : [{ text: item.headline, hit: false }],
 );
 
 watch(
@@ -123,9 +125,17 @@ function cancelEdit(): void {
       </span>
       <p v-if="editError" class="edit-error">{{ editError }}</p>
 
-      <!-- eslint-disable-next-line vue/no-v-html -- descriptionPreviewHtml is DOMPurify-sanitized in markdown/render.ts -->
-      <div v-if="descriptionPreviewHtml" ref="descPreviewEl" class="desc-preview" v-html="descriptionPreviewHtml" />
-      <p v-if="showDescHint" class="desc-hint">Also matches in the description (not visible in this preview)</p>
+      <!-- eslint-disable vue/no-v-html -- descriptionPreviewHtml is DOMPurify-sanitized in markdown/render.ts -->
+      <div
+        v-if="descriptionPreviewHtml"
+        ref="descPreviewEl"
+        class="desc-preview"
+        v-html="descriptionPreviewHtml"
+      />
+      <!-- eslint-enable vue/no-v-html -->
+      <p v-if="showDescHint" class="desc-hint">
+        Also matches in the description (not visible in this preview)
+      </p>
     </div>
 
     <div

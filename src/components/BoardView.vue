@@ -40,7 +40,10 @@ const fileUrl = computed(
 // Stale names (a tag deleted or renamed by hand since the filter was set) are ignored here, so a
 // stored name that no longer exists on the board never hides items.
 const effectiveActiveTags = computed(
-  () => new Set([...tagFilterStore.activeNames].filter((name) => boardStore.board.tags.some((t) => t.name === name))),
+  () =>
+    new Set(
+      [...tagFilterStore.activeNames].filter((name) => boardStore.board.tags.some((t) => t.name === name)),
+    ),
 );
 const isTagFilterActive = computed(() => effectiveActiveTags.value.size > 0);
 
@@ -209,7 +212,10 @@ function onToggleTag(id: ItemId, tag: TagName): void {
       </button>
     </div>
 
-    <TagFilterBar v-if="!boardStore.fileNotFound && boardStore.board.tags.length > 0" :tags="boardStore.board.tags" />
+    <TagFilterBar
+      v-if="!boardStore.fileNotFound && boardStore.board.tags.length > 0"
+      :tags="boardStore.board.tags"
+    />
 
     <main v-if="!boardStore.fileNotFound" class="columns">
       <SectionColumn

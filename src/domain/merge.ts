@@ -3,7 +3,16 @@
 // throw one side away (see doc/requirement-1-concurrency.md, phase 3).
 import { itemsEqual, validateBoard } from './board';
 import { err, ok, type Result } from './result';
-import { allItems, sectionOf, type Board, type Item, type ItemId, type Section, type Tag, type TagName } from './types';
+import {
+  allItems,
+  sectionOf,
+  type Board,
+  type Item,
+  type ItemId,
+  type Section,
+  type Tag,
+  type TagName,
+} from './types';
 
 export type MergeConflict =
   | { readonly type: 'DivergentEdit'; readonly id: ItemId }
