@@ -24,6 +24,10 @@ const emit = defineEmits<{
   editHeadline: [id: ItemId, headline: string];
 }>();
 
+// Kept only in memory on purpose: every reload starts with all sections expanded. The column stays
+// mounted while search and tag filters change, so this survives filtering.
+const collapsed = ref(false);
+
 const localItems = ref<Item[]>([...items]);
 watch(
   () => items,
@@ -42,15 +46,23 @@ function onUpdate(event: DraggableEvent<Item>): void {
 </script>
 
 <template>
-  <section class="column" :class="section">
-    <div class="column-header">
-      <h2>{{ title }}</h2>
-      <span class="count" aria-live="polite">
-        {{ filterActive ? `${items.length} of ${totalCount}` : items.length }}
-      </span>
-    </div>
+  <section class="column" :class="[section, { collapsed }]">
+    <h2 class="column-header">
+      <button type="button" class="toggle" :aria-expanded="!collapsed" @click="collapsed = !collapsed">
+        <i
+          class="fa-solid chevron"
+          :class="collapsed ? 'fa-chevron-right' : 'fa-chevron-down'"
+          aria-hidden="true"
+        ></i>
+        <span class="title">{{ title }}</span>
+        <span class="count" aria-live="polite">
+          {{ filterActive ? `${items.length} of ${totalCount}` : items.length }}
+        </span>
+      </button>
+    </h2>
 
     <VueDraggable
+      v-show="!collapsed"
       v-model="localItems"
       tag="ul"
       class="list"
@@ -99,21 +111,42 @@ function onUpdate(event: DraggableEvent<Item>): void {
   background: color-mix(in srgb, var(--discarded-tint) 14%, var(--surface-alt));
 }
 
+.column.collapsed {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
 .column-header {
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.toggle {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   width: 100%;
   padding: 0.2rem 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.column-header h2 {
-  font-size: 0.95rem;
-  margin: 0;
+.chevron {
+  width: 0.8em;
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+.title {
   flex: 1;
 }
 
 .count {
+  font-weight: normal;
   font-size: 0.8rem;
   color: var(--text-muted);
   background: var(--surface);

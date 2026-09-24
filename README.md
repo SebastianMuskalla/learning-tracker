@@ -122,6 +122,17 @@ the build about it, using either option:
 
 The app now loads your topics and is ready to use.
 
+## Collapsing sections
+
+Click a section's headline (**New**, **WIP**, **Complete**, or
+**Discarded**) to collapse it. A collapsed section shows only its title and
+its item count, so it takes very little vertical space. Click the headline
+again to expand it. This also works while a search or a tag filter is
+active; the count then reads "x of y" as usual.
+
+Which sections are collapsed is not saved anywhere. After a reload, all
+sections are expanded again.
+
 ## Search
 
 A floating search bar sits in the bottom-left corner of the board, next to
@@ -322,5 +333,4 @@ can never throw away work you have not saved yet.
 
 - Syntax highlighting for languages
 - Code review
-- Fold sections
 - Dark Mode
