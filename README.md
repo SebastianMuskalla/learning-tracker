@@ -116,7 +116,6 @@ the build about it, using either option:
    - **Branch**: usually `main`
    - **Path**: usually `learning.md`
    - **Personal access token**: the token from Step 2
-   - **Token storage**: how the browser keeps the token (see below)
 3. Click **Test connection**. The app tries to read the file and reports
    the result.
 4. Click **Save & continue**.
@@ -171,14 +170,6 @@ pauses during a search.
 Which tags are active is remembered by your browser (not stored in
 `learning.md`), so it survives a reload but is not shared between devices
 or with anyone you share the repository with.
-
-### Token storage modes
-
-| Mode                        | Where the token is kept                                                        | Use it when                                                   |
-| --------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| Remember on this device     | Browser `localStorage`                                                         | You use a personal computer                                   |
-| This session only           | Browser `sessionStorage`; gone after you close the tab                         | You use a shared or work computer                             |
-| Encrypted with a passphrase | `localStorage`, encrypted; you type a passphrase once per session to unlock it | You want the convenience of "remember," with extra protection |
 
 ## Development
 
@@ -322,13 +313,16 @@ can never throw away work you have not saved yet.
   your browser.
 - Links inside a description open with `rel="noopener noreferrer"` and in
   a new tab.
-- Someone can steal your token from a device. If that happens, they get
-  read and write access to one file, in one private repository. They get
-  nothing else. Use the narrow permissions from Step 2. Choose the storage
-  mode from Step 4 that best fits the device you use.
+- The token is remembered in the browser's `localStorage`, so it survives
+  a reload. Someone can steal your token from a device. If that happens,
+  they get read and write access to one file, in one private repository.
+  They get nothing else. Use the narrow permissions from Step 2.
 
 ## Future ideas
 
-- Remove passphrase / other code simplifications
 - Syntax highlighting for languages
 - Code review
+- Fold sections
+- Center list of tags
+- Dark Mode
+- Float search bar when little screen space

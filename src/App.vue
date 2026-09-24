@@ -5,7 +5,7 @@ import SetupView from './components/SetupView.vue';
 import { useSettingsStore } from './store/settings';
 
 const settings = useSettingsStore();
-const showSetup = ref(!settings.isReady && !settings.needsPassphrase);
+const showSetup = ref(!settings.isReady);
 const setupReason = ref<string | null>(null);
 
 watch(
@@ -27,6 +27,6 @@ function onSetupDone(): void {
 </script>
 
 <template>
-  <SetupView v-if="showSetup || settings.needsPassphrase" :reason="setupReason" @done="onSetupDone" />
+  <SetupView v-if="showSetup" :reason="setupReason" @done="onSetupDone" />
   <BoardView v-else @open-settings="openSettings" />
 </template>

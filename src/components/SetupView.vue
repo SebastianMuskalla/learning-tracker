@@ -5,7 +5,6 @@ import { allItems, type HexColor, type Tag, type TagName } from '../domain/types
 import { getFile } from '../github/client';
 import { useBoardStore } from '../store/board';
 import { useSettingsStore } from '../store/settings';
-import type { TokenStorageMode } from '../store/settings';
 import { TAG_PALETTE } from '../tags/palette';
 import ColorSwatchPicker from './ColorSwatchPicker.vue';
 import TagChip from './TagChip.vue';
@@ -16,7 +15,7 @@ const emit = defineEmits<{ done: [] }>();
 const settings = useSettingsStore();
 const boardStore = useBoardStore();
 
-const closable = computed(() => settings.isReady && !settings.needsPassphrase);
+const closable = computed(() => settings.isReady);
 
 const fileUrl = computed(
   () => `https://github.com/${settings.owner}/${settings.repo}/blob/${settings.branch}/${settings.path}`,
@@ -119,16 +118,10 @@ const repo = ref(settings.repo);
 const branch = ref(settings.branch || 'main');
 const path = ref(settings.path || 'learning.md');
 const token = ref('');
-const storageMode = ref<TokenStorageMode>(settings.tokenStorageMode);
-const passphrase = ref('');
-const unlockPassphrase = ref('');
 
 const testState = ref<'idle' | 'testing' | 'ok' | 'error'>('idle');
 const testMessage = ref('');
 const saveError = ref('');
-const unlockError = ref('');
-
-const showUnlock = computed(() => settings.needsPassphrase);
 
 const repoFieldsFilled = computed(
   () =>
@@ -183,29 +176,10 @@ async function save(): Promise<void> {
   });
 
   if (token.value.trim() !== '') {
-    try {
-      await settings.setToken(token.value.trim(), storageMode.value, passphrase.value);
-    } catch (cause) {
-      saveError.value = cause instanceof Error ? cause.message : String(cause);
-      return;
-    }
+    settings.setToken(token.value.trim());
   }
 
   emit('done');
-}
-
-async function unlock(): Promise<void> {
-  unlockError.value = '';
-  const success = await settings.unlockWithPassphrase(unlockPassphrase.value);
-  if (!success) {
-    unlockError.value = 'Wrong passphrase, or no encrypted token is stored.';
-    return;
-  }
-  emit('done');
-}
-
-function useDifferentRepo(): void {
-  settings.clearToken();
 }
 
 function describeError(type: string): string {
@@ -227,147 +201,115 @@ function describeError(type: string): string {
     <div class="card">
       <p v-if="reason" class="reason">{{ reason }}</p>
 
-      <template v-if="showUnlock">
-        <h1>Unlock</h1>
-        <p class="hint">Enter the passphrase used to encrypt your token on this device.</p>
-        <label>
-          Passphrase
-          <input v-model="unlockPassphrase" type="password" @keyup.enter="unlock" />
-        </label>
-        <p v-if="unlockError" class="error">{{ unlockError }}</p>
-        <div class="actions">
-          <button class="primary" @click="unlock">
-            <i class="fa-solid fa-unlock" aria-hidden="true"></i> Unlock
-          </button>
-          <button class="ghost" @click="useDifferentRepo">
-            <i class="fa-solid fa-right-left" aria-hidden="true"></i> Use a different repository
-          </button>
-        </div>
-      </template>
+      <div class="header-row">
+        <h1>Learning Tracker setup</h1>
+        <button v-if="closable" class="close" title="Close (Esc)" @click="emit('done')">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p class="hint">
+        Data lives in a private repository, reached through a fine-grained personal access token scoped to
+        that repository's Contents (read/write) only.
+      </p>
 
-      <template v-else>
-        <div class="header-row">
-          <h1>Learning Tracker setup</h1>
-          <button v-if="closable" class="close" title="Close (Esc)" @click="emit('done')">
-            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-          </button>
-        </div>
-        <p class="hint">
-          Data lives in a private repository, reached through a fine-grained personal access token scoped to
-          that repository's Contents (read/write) only.
-        </p>
+      <div v-if="closable" class="repo-links">
+        <a :href="fileUrl" target="_blank" rel="noopener noreferrer">View learning.md on GitHub</a>
+        <a :href="historyUrl" target="_blank" rel="noopener noreferrer">View file history</a>
+      </div>
 
-        <div v-if="closable" class="repo-links">
-          <a :href="fileUrl" target="_blank" rel="noopener noreferrer">View learning.md on GitHub</a>
-          <a :href="historyUrl" target="_blank" rel="noopener noreferrer">View file history</a>
-        </div>
+      <section v-if="tagsBlockVisible" class="tags-block">
+        <h2>Tags</h2>
 
-        <section v-if="tagsBlockVisible" class="tags-block">
-          <h2>Tags</h2>
-
-          <ul class="tag-list">
-            <li v-for="tag in boardStore.board.tags" :key="tag.name" class="tag-row">
-              <TagChip :name="tag.name" :color="tag.color" mode="normal" />
-              <span class="tag-usage">{{ usageLabel(tag.name) }}</span>
-              <button
-                type="button"
-                class="icon-button"
-                title="Change color"
-                :aria-label="`Change color of tag ${tag.name}`"
-                @click="colorPickerOpenFor = colorPickerOpenFor === tag.name ? null : tag.name"
-              >
-                <i class="fa-solid fa-palette" aria-hidden="true"></i>
-              </button>
-              <button
-                type="button"
-                class="icon-button danger"
-                title="Delete tag"
-                :aria-label="`Delete tag ${tag.name}`"
-                @click="deleteTarget = tag"
-              >
-                <i class="fa-solid fa-trash" aria-hidden="true"></i>
-              </button>
-              <ColorSwatchPicker
-                v-if="colorPickerOpenFor === tag.name"
-                class="inline-picker"
-                :model-value="tag.color"
-                @update:model-value="(c) => recolorTag(tag, c)"
-              />
-            </li>
-          </ul>
-
-          <div class="new-tag">
-            <input
-              v-model="newTagName"
-              type="text"
-              maxlength="32"
-              pattern="[\p{L}\p{N}_-]{1,32}"
-              aria-label="New tag name"
-              placeholder="New tag name"
-              @keyup.enter="addTag"
-            />
-            <ColorSwatchPicker v-model="newTagColor" />
-            <button type="button" class="ghost" @click="addTag">
-              <i class="fa-solid fa-plus" aria-hidden="true"></i> Add
+        <ul class="tag-list">
+          <li v-for="tag in boardStore.board.tags" :key="tag.name" class="tag-row">
+            <TagChip :name="tag.name" :color="tag.color" mode="normal" />
+            <span class="tag-usage">{{ usageLabel(tag.name) }}</span>
+            <button
+              type="button"
+              class="icon-button"
+              title="Change color"
+              :aria-label="`Change color of tag ${tag.name}`"
+              @click="colorPickerOpenFor = colorPickerOpenFor === tag.name ? null : tag.name"
+            >
+              <i class="fa-solid fa-palette" aria-hidden="true"></i>
             </button>
-          </div>
-          <p v-if="newTagError" class="error">{{ newTagError }}</p>
-        </section>
-        <p v-else-if="tagsParseErrorVisible" class="hint">Fix learning.md before editing tags.</p>
+            <button
+              type="button"
+              class="icon-button danger"
+              title="Delete tag"
+              :aria-label="`Delete tag ${tag.name}`"
+              @click="deleteTarget = tag"
+            >
+              <i class="fa-solid fa-trash" aria-hidden="true"></i>
+            </button>
+            <ColorSwatchPicker
+              v-if="colorPickerOpenFor === tag.name"
+              class="inline-picker"
+              :model-value="tag.color"
+              @update:model-value="(c) => recolorTag(tag, c)"
+            />
+          </li>
+        </ul>
 
-        <label>
-          Owner
-          <input v-model="owner" placeholder="your-github-username" autocomplete="off" />
-        </label>
-        <label>
-          Repository
-          <input v-model="repo" placeholder="learning-data" autocomplete="off" />
-        </label>
-        <label>
-          Branch
-          <input v-model="branch" placeholder="main" autocomplete="off" />
-        </label>
-        <label>
-          Path
-          <input v-model="path" placeholder="learning.md" autocomplete="off" />
-        </label>
-        <label>
-          Personal access token
+        <div class="new-tag">
           <input
-            v-model="token"
-            type="password"
-            :placeholder="settings.token !== null ? 'Leave blank to keep the current token' : 'github_pat_…'"
-            autocomplete="off"
+            v-model="newTagName"
+            type="text"
+            maxlength="32"
+            pattern="[\p{L}\p{N}_-]{1,32}"
+            aria-label="New tag name"
+            placeholder="New tag name"
+            @keyup.enter="addTag"
           />
-        </label>
-        <label>
-          Token storage
-          <select v-model="storageMode">
-            <option value="local">Remember on this device</option>
-            <option value="session">This session only</option>
-            <option value="passphrase">Encrypted with a passphrase</option>
-          </select>
-        </label>
-        <label v-if="storageMode === 'passphrase'">
-          Passphrase
-          <input v-model="passphrase" type="password" autocomplete="off" />
-        </label>
-
-        <div class="actions">
-          <button
-            class="ghost"
-            :disabled="!repoFieldsFilled || testState === 'testing'"
-            @click="testConnection"
-          >
-            <i class="fa-solid fa-plug" aria-hidden="true"></i> Test connection
-          </button>
-          <button class="primary" :disabled="!repoFieldsFilled" @click="save">
-            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save &amp; continue
+          <ColorSwatchPicker v-model="newTagColor" />
+          <button type="button" class="ghost" @click="addTag">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i> Add
           </button>
         </div>
-        <p v-if="testMessage" :class="testState === 'error' ? 'error' : 'ok'">{{ testMessage }}</p>
-        <p v-if="saveError" class="error">{{ saveError }}</p>
-      </template>
+        <p v-if="newTagError" class="error">{{ newTagError }}</p>
+      </section>
+      <p v-else-if="tagsParseErrorVisible" class="hint">Fix learning.md before editing tags.</p>
+
+      <label>
+        Owner
+        <input v-model="owner" placeholder="your-github-username" autocomplete="off" />
+      </label>
+      <label>
+        Repository
+        <input v-model="repo" placeholder="learning-data" autocomplete="off" />
+      </label>
+      <label>
+        Branch
+        <input v-model="branch" placeholder="main" autocomplete="off" />
+      </label>
+      <label>
+        Path
+        <input v-model="path" placeholder="learning.md" autocomplete="off" />
+      </label>
+      <label>
+        Personal access token
+        <input
+          v-model="token"
+          type="password"
+          :placeholder="settings.token !== null ? 'Leave blank to keep the current token' : 'github_pat_…'"
+          autocomplete="off"
+        />
+      </label>
+
+      <div class="actions">
+        <button
+          class="ghost"
+          :disabled="!repoFieldsFilled || testState === 'testing'"
+          @click="testConnection"
+        >
+          <i class="fa-solid fa-plug" aria-hidden="true"></i> Test connection
+        </button>
+        <button class="primary" :disabled="!repoFieldsFilled" @click="save">
+          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save &amp; continue
+        </button>
+      </div>
+      <p v-if="testMessage" :class="testState === 'error' ? 'error' : 'ok'">{{ testMessage }}</p>
+      <p v-if="saveError" class="error">{{ saveError }}</p>
     </div>
 
     <div v-if="deleteTarget" class="confirm-overlay">
