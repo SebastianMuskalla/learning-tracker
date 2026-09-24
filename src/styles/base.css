@@ -1,18 +1,24 @@
 :root {
-  --bg: #f7f7f5;
-  --surface: #ffffff;
-  --surface-alt: #f0efec;
-  --border: #ddd9d2;
-  --text: #1d1b18;
-  --text-muted: #6b675f;
-  --accent: #3a6b52;
-  --accent-contrast: #ffffff;
-  --danger: #a4392f;
-  --warning: #a4780f;
-  --new: #6b675f;
-  --wip: #3a6b52;
-  --complete: #2d5f8a;
-  --discarded: #8a8578;
+  /* Theme: `color-scheme` decides which side of every `light-dark()` below is used. By default it
+   * follows the device setting (light if the device states no preference). The theme store
+   * (src/store/theme.ts) sets `data-theme` on <html> to force one side. The dark side is
+   * OLED friendly: a pure black page background and near-black surfaces. */
+  color-scheme: light dark;
+
+  --bg: light-dark(#f7f7f5, #000000);
+  --surface: light-dark(#ffffff, #0f0e0d);
+  --surface-alt: light-dark(#f0efec, #181715);
+  --border: light-dark(#ddd9d2, #2e2b27);
+  --text: light-dark(#1d1b18, #ece9e3);
+  --text-muted: light-dark(#6b675f, #a39e94);
+  --accent: light-dark(#3a6b52, #6fbb92);
+  --accent-contrast: light-dark(#ffffff, #10241a);
+  --danger: light-dark(#a4392f, #e2776a);
+  --warning: light-dark(#a4780f, #e0b04d);
+  --new: light-dark(#6b675f, #a39e94);
+  --wip: light-dark(#3a6b52, #6fbb92);
+  --complete: light-dark(#2d5f8a, #7ab0e6);
+  --discarded: light-dark(#8a8578, #9a9587);
 
   --new-tint: #3a6ea5;
   --wip-tint: #c9a227;
@@ -21,12 +27,18 @@
 
   --drawer-width: min(100vw, 40rem);
 
-  --search-highlight: rgba(250, 204, 21, 0.55);
+  --search-highlight: light-dark(rgba(250, 204, 21, 0.55), rgba(250, 204, 21, 0.35));
 
   /* Tag chips are always pastel, so the same dark ink reads well on them in both themes. */
   --tag-ink: #1d1b18;
+}
 
-  color-scheme: light dark;
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 @media (min-width: 1300px) {
@@ -38,27 +50,6 @@
 @media (min-width: 1700px) {
   :root {
     --drawer-width: min(100vw, 88rem);
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1a1917;
-    --surface: #242220;
-    --surface-alt: #2c2a27;
-    --border: #3c3934;
-    --text: #ece9e3;
-    --text-muted: #a8a399;
-    --accent: #6fbb92;
-    --accent-contrast: #10241a;
-    --danger: #e2776a;
-    --warning: #e0b04d;
-    --new: #a8a399;
-    --wip: #6fbb92;
-    --complete: #7ab0e6;
-    --discarded: #9a9587;
-
-    --search-highlight: rgba(250, 204, 21, 0.35);
   }
 }
 

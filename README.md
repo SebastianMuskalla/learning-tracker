@@ -122,6 +122,21 @@ the build about it, using either option:
 
 The app now loads your topics and is ready to use.
 
+## Theme
+
+The app has a light and a dark design. The dark design uses a pure black
+background, which saves power on OLED screens. On the settings page, in the
+**Theme** section, you pick one of three modes:
+
+- **Device** (the default): the app uses the light or dark design to match
+  your device's setting. If the device states no preference, the app uses
+  the light design.
+- **Light**: always the light design.
+- **Dark**: always the dark design.
+
+Your browser remembers the mode (it is not stored in `learning.md`), so it
+survives a reload but is not shared between devices.
+
 ## Collapsing sections
 
 Click a section's headline (**New**, **WIP**, **Complete**, or
@@ -333,4 +348,3 @@ can never throw away work you have not saved yet.
 
 - Syntax highlighting for languages
 - Code review
-- Dark Mode

@@ -5,6 +5,7 @@ import { allItems, type HexColor, type Tag, type TagName } from '../domain/types
 import { getFile } from '../github/client';
 import { useBoardStore } from '../store/board';
 import { useSettingsStore } from '../store/settings';
+import { THEME_MODES, useThemeStore, type ThemeMode } from '../store/theme';
 import { TAG_PALETTE } from '../tags/palette';
 import ColorSwatchPicker from './ColorSwatchPicker.vue';
 import TagChip from './TagChip.vue';
@@ -14,6 +15,13 @@ const emit = defineEmits<{ done: [] }>();
 
 const settings = useSettingsStore();
 const boardStore = useBoardStore();
+const theme = useThemeStore();
+
+const themeLabels: Record<ThemeMode, { readonly label: string; readonly icon: string }> = {
+  system: { label: 'Device', icon: 'fa-circle-half-stroke' },
+  light: { label: 'Light', icon: 'fa-sun' },
+  dark: { label: 'Dark', icon: 'fa-moon' },
+};
 
 const closable = computed(() => settings.isReady);
 
@@ -216,6 +224,24 @@ function describeError(type: string): string {
         <a :href="fileUrl" target="_blank" rel="noopener noreferrer">View learning.md on GitHub</a>
         <a :href="historyUrl" target="_blank" rel="noopener noreferrer">View file history</a>
       </div>
+
+      <fieldset class="theme-block">
+        <legend>Theme</legend>
+        <div class="theme-options">
+          <label v-for="mode in THEME_MODES" :key="mode" class="theme-option">
+            <input
+              type="radio"
+              name="theme"
+              :value="mode"
+              :checked="theme.mode === mode"
+              @change="theme.setMode(mode)"
+            />
+            <i :class="['fa-solid', themeLabels[mode].icon]" aria-hidden="true"></i>
+            {{ themeLabels[mode].label }}
+          </label>
+        </div>
+        <p class="theme-hint">"Device" follows your device's light or dark setting.</p>
+      </fieldset>
 
       <section v-if="tagsBlockVisible" class="tags-block">
         <h2>Tags</h2>
@@ -454,6 +480,67 @@ button.ghost {
 .ok {
   color: var(--accent);
   font-size: 0.9rem;
+}
+
+.theme-block {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+  padding: 1rem 0 0;
+}
+
+.theme-block legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.theme-options {
+  clear: both;
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.theme-option {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0;
+  padding: 0.4em 0.9em;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.theme-option + .theme-option {
+  border-left: 1px solid var(--border);
+}
+
+.theme-option:has(input:checked) {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.theme-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+
+.theme-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-hint {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin: 0.4rem 0 1rem;
 }
 
 .tags-block {
