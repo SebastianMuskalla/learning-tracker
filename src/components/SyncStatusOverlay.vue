@@ -26,10 +26,9 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
 
 <style scoped>
 .overlay {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 50;
+  /* Pins to the right edge of the floating-bar flex row in BoardView.vue, whether it shares a
+   * row with the search bar or wraps onto its own. */
+  margin-left: auto;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;

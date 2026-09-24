@@ -59,10 +59,6 @@ defineExpose({ focus, hasFocus });
 
 <style scoped>
 .search-bar {
-  position: fixed;
-  left: 1rem;
-  bottom: 1rem;
-  z-index: 50;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -105,13 +101,5 @@ defineExpose({ focus, hasFocus });
   width: 1.6em;
   height: 1.6em;
   line-height: 1;
-}
-
-/* Keep the search bar and the sync overlay from overlapping on narrow screens: stack the search
- * bar above the overlay instead of letting the two fixed boxes collide in the bottom corners. */
-@media (max-width: 40rem) {
-  .search-bar {
-    bottom: 4.5rem;
-  }
 }
 </style>

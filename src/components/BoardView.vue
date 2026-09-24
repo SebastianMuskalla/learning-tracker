@@ -286,14 +286,16 @@ function onToggleTag(id: ItemId, tag: TagName): void {
       @keep-theirs="boardStore.resolveConflict('keepTheirs')"
     />
 
-    <SyncStatusOverlay :sync-status="boardStore.syncStatus" :error-message="boardStore.errorMessage" />
+    <div class="floating-bar">
+      <SearchBar
+        v-if="!boardStore.fileNotFound"
+        ref="searchBar"
+        :match-count="matchCount"
+        :total-count="totalCount"
+      />
 
-    <SearchBar
-      v-if="!boardStore.fileNotFound"
-      ref="searchBar"
-      :match-count="matchCount"
-      :total-count="totalCount"
-    />
+      <SyncStatusOverlay :sync-status="boardStore.syncStatus" :error-message="boardStore.errorMessage" />
+    </div>
   </div>
 </template>
 
@@ -327,6 +329,25 @@ function onToggleTag(id: ItemId, tag: TagName): void {
   border: none;
   border-radius: 6px;
   padding: 0.5em 1.2em;
+}
+
+/* Anchors the search bar and sync status badge to the bottom corners, letting them share a row
+ * whenever both fit and only wrapping onto separate rows once the viewport is too narrow for
+ * that - instead of stacking based on a fixed breakpoint regardless of actual content width. */
+.floating-bar {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.floating-bar > :deep(*) {
+  pointer-events: auto;
 }
 
 .columns {

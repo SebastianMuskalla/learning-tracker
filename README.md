@@ -325,4 +325,3 @@ can never throw away work you have not saved yet.
 - Fold sections
 - Center list of tags
 - Dark Mode
-- Float search bar when little screen space
