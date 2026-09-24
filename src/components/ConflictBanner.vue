@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Board, Section } from '../domain/types';
+import ModalDialog from './ModalDialog.vue';
 
 const { local, remote } = defineProps<{
   readonly local: Board;
@@ -20,9 +21,10 @@ const SECTIONS: readonly { readonly key: Section; readonly title: string }[] = [
 </script>
 
 <template>
-  <div class="overlay">
+  <!-- Escape does not close it: the user has to choose one of the two versions. -->
+  <ModalDialog labelled-by="conflict-title" width="40rem">
     <div class="dialog">
-      <h2>learning.md changed in two places</h2>
+      <h2 id="conflict-title">learning.md changed in two places</h2>
       <p class="hint">
         The same item was changed differently here and on GitHub, so the app could not combine them
         automatically. Compare the two versions below and pick one — the other is discarded.
@@ -61,30 +63,12 @@ const SECTIONS: readonly { readonly key: Section; readonly title: string }[] = [
         </button>
       </div>
     </div>
-  </div>
+  </ModalDialog>
 </template>
 
 <style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  z-index: 100;
-}
-
 .dialog {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.5rem;
-  max-width: 40rem;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
+  padding: 0.3rem;
 }
 
 h2 {

@@ -2,9 +2,11 @@
 import { ref, watch } from 'vue';
 import BoardView from './components/BoardView.vue';
 import SetupView from './components/SetupView.vue';
+import { useSyncLifecycle } from './composables/useSyncLifecycle';
 import { useSettingsStore } from './store/settings';
 
 const settings = useSettingsStore();
+useSyncLifecycle();
 const showSetup = ref(!settings.isReady);
 const setupReason = ref<string | null>(null);
 

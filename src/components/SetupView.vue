@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { makeHexColor, makeTagName } from '../domain/factories';
+import { makeTagName } from '../domain/factories';
 import { allItems, type HexColor, type Tag, type TagName } from '../domain/types';
 import { getFile } from '../github/client';
+import type { GithubClientError } from '../github/types';
+import { githubFileUrl, githubHistoryUrl } from '../github/urls';
 import { useBoardStore } from '../store/board';
 import { useSettingsStore } from '../store/settings';
 import { THEME_MODES, useThemeStore, type ThemeMode } from '../store/theme';
 import { TAG_PALETTE } from '../tags/palette';
 import ColorSwatchPicker from './ColorSwatchPicker.vue';
+import ModalDialog from './ModalDialog.vue';
 import TagChip from './TagChip.vue';
 
 const { reason = null } = defineProps<{ readonly reason?: string | null }>();
@@ -25,12 +28,11 @@ const themeLabels: Record<ThemeMode, { readonly label: string; readonly icon: st
 
 const closable = computed(() => settings.isReady);
 
-const fileUrl = computed(
-  () => `https://github.com/${settings.owner}/${settings.repo}/blob/${settings.branch}/${settings.path}`,
-);
-const historyUrl = computed(
-  () => `https://github.com/${settings.owner}/${settings.repo}/commits/${settings.branch}/${settings.path}`,
-);
+const fileUrl = computed(() => githubFileUrl(settings));
+const historyUrl = computed(() => githubHistoryUrl(settings));
+
+/** The characters GitHub allows in user, organization, and repository names. */
+const GITHUB_NAME_RE = /^[A-Za-z0-9._-]+$/;
 
 const tagsBlockVisible = computed(
   () => closable.value && boardStore.sha !== null && boardStore.canWrite && !boardStore.fileNotFound,
@@ -85,30 +87,25 @@ function addTag(): void {
     newTagError.value = `A tag named "${name}" already exists.`;
     return;
   }
-  void boardStore.applyAndSync({ type: 'createTag', name, color: newTagColor.value });
+  boardStore.applyAndSync({ type: 'createTag', name, color: newTagColor.value });
   newTagName.value = '';
 }
 
-function recolorTag(tag: Tag, color: string): void {
+function recolorTag(tag: Tag, color: HexColor): void {
   colorPickerOpenFor.value = null;
   if (color === tag.color) return;
-  const result = makeHexColor(color);
-  if (!result.ok) return;
-  void boardStore.applyAndSync({ type: 'setTagColor', name: tag.name, color: result.value });
+  boardStore.applyAndSync({ type: 'setTagColor', name: tag.name, color });
 }
 
 function confirmDeleteTag(): void {
   if (!deleteTarget.value) return;
-  void boardStore.applyAndSync({ type: 'deleteTag', name: deleteTarget.value.name });
+  boardStore.applyAndSync({ type: 'deleteTag', name: deleteTarget.value.name });
   deleteTarget.value = null;
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return;
-  if (deleteTarget.value !== null) {
-    deleteTarget.value = null;
-    return;
-  }
+  // While the delete dialog is open, it handles Escape itself.
+  if (event.key !== 'Escape' || deleteTarget.value !== null) return;
   if (closable.value) {
     emit('done');
   }
@@ -139,32 +136,55 @@ const repoFieldsFilled = computed(
     path.value.trim() !== '',
 );
 
+/** An error text for the owner and repository fields, or `null` if both are fine. */
+function repoNameError(): string | null {
+  if (owner.value.trim() === '' || repo.value.trim() === '') return 'Owner and repository are required.';
+  if (!GITHUB_NAME_RE.test(owner.value.trim()) || !GITHUB_NAME_RE.test(repo.value.trim())) {
+    return 'Owner and repository may only contain letters, digits, ".", "_" and "-".';
+  }
+  return null;
+}
+
 async function testConnection(): Promise<void> {
+  const nameError = repoNameError();
+  if (nameError !== null) {
+    testState.value = 'error';
+    testMessage.value = nameError;
+    return;
+  }
   testState.value = 'testing';
   testMessage.value = '';
-  const result = await getFile({
-    owner: owner.value.trim(),
-    repo: repo.value.trim(),
-    branch: branch.value.trim(),
-    path: path.value.trim(),
-    token: token.value.trim(),
-  });
-  if (result.ok) {
-    testState.value = 'ok';
-    testMessage.value = `Connected — read ${String(result.value.text.length)} bytes.`;
-  } else if (result.error.type === 'NotFound') {
-    testState.value = 'ok';
-    testMessage.value = 'Connected — the file does not exist yet; it can be created on first save.';
-  } else {
+  // A blank field means "keep the current token", so test with that one.
+  const tokenToTest = token.value.trim() === '' ? (settings.token ?? '') : token.value.trim();
+  try {
+    const result = await getFile({
+      owner: owner.value.trim(),
+      repo: repo.value.trim(),
+      branch: branch.value.trim(),
+      path: path.value.trim(),
+      token: tokenToTest,
+    });
+    if (result.ok) {
+      testState.value = 'ok';
+      testMessage.value = `Connected — read ${String(result.value.text.length)} characters.`;
+    } else if (result.error.type === 'NotFound') {
+      testState.value = 'ok';
+      testMessage.value = 'Connected — the file does not exist yet; it can be created on first save.';
+    } else {
+      testState.value = 'error';
+      testMessage.value = describeError(result.error);
+    }
+  } catch (cause) {
     testState.value = 'error';
-    testMessage.value = describeError(result.error.type);
+    testMessage.value = `Request failed: ${cause instanceof Error ? cause.message : String(cause)}`;
   }
 }
 
 async function save(): Promise<void> {
   saveError.value = '';
-  if (owner.value.trim() === '' || repo.value.trim() === '') {
-    saveError.value = 'Owner and repository are required.';
+  const nameError = repoNameError();
+  if (nameError !== null) {
+    saveError.value = nameError;
     return;
   }
   if (token.value.trim() === '' && settings.token === null) {
@@ -172,34 +192,69 @@ async function save(): Promise<void> {
     return;
   }
 
-  // Write any pending batch to the repository it was made for before possibly switching to a
-  // different one below (see doc/requirement-3-tagging.md, section 3.7).
-  await boardStore.flushNow();
-
-  settings.updateRepoSettings({
+  const next = {
     owner: owner.value.trim(),
     repo: repo.value.trim(),
     branch: branch.value.trim() || 'main',
     path: path.value.trim() || 'learning.md',
-  });
+  };
 
+  // Set a new token first: pending work that failed with 401 can then be written with it.
+  let storageFailed = false;
   if (token.value.trim() !== '') {
-    settings.setToken(token.value.trim());
+    storageFailed = !settings.setToken(token.value.trim());
+  }
+
+  const locationChanged =
+    next.owner !== settings.owner ||
+    next.repo !== settings.repo ||
+    next.branch !== settings.branch ||
+    next.path !== settings.path;
+  if (locationChanged && settings.isRepoConfigured) {
+    // Write pending work to the repository it was made for before switching to another one
+    // (see doc/requirement-3-tagging.md, section 3.7). Switch only after a clean write, and then
+    // forget everything about the old repository.
+    await boardStore.flushNow();
+    if (boardStore.hasUnsavedWork) {
+      const reasonText = boardStore.errorMessage === null ? '' : ` (${boardStore.errorMessage})`;
+      saveError.value =
+        `The changes for ${settings.owner}/${settings.repo} are not saved yet${reasonText}. ` +
+        'Fix the problem first, or reload the page to discard them.';
+      return;
+    }
+    boardStore.reset();
+  }
+
+  if (!settings.updateRepoSettings(next)) storageFailed = true;
+  if (storageFailed) {
+    boardStore.showNotice(
+      'The settings could not be saved in this browser; you will need to enter them again after a reload.',
+    );
   }
 
   emit('done');
 }
 
-function describeError(type: string): string {
-  switch (type) {
+function describeError(error: GithubClientError): string {
+  switch (error.type) {
     case 'Unauthorized':
       return 'Unauthorized — check the token and its repository scope.';
+    case 'Forbidden':
+      return 'Forbidden — the token cannot access this repository. Check that Contents is set to "Read and write".';
+    case 'NotFound':
+      return 'Not found — check the owner, repository, branch, and path.';
+    case 'Conflict':
+      return 'Request failed (409 conflict).';
     case 'RateLimited':
       return 'Rate limited by GitHub — try again shortly.';
     case 'Network':
       return 'Network error — is api.github.com reachable from this device?';
-    default:
-      return `Request failed (${type}).`;
+    case 'InvalidUtf8':
+      return 'Connected, but the file is not valid UTF-8 text.';
+    case 'Unknown':
+      return error.message === ''
+        ? `Request failed (${String(error.status)}).`
+        : `Request failed (${String(error.status)}): ${error.message}`;
   }
 }
 </script>
@@ -338,20 +393,18 @@ function describeError(type: string): string {
       <p v-if="saveError" class="error">{{ saveError }}</p>
     </div>
 
-    <div v-if="deleteTarget" class="confirm-overlay">
-      <div class="confirm-dialog">
-        <h4>Delete tag "{{ deleteTarget.name }}"?</h4>
-        <p>{{ deleteConfirmText }}</p>
-        <div class="confirm-actions">
-          <button class="ghost" @click="deleteTarget = null">
-            <i class="fa-solid fa-xmark" aria-hidden="true"></i> Cancel
-          </button>
-          <button class="danger" @click="confirmDeleteTag">
-            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete tag
-          </button>
-        </div>
+    <ModalDialog v-if="deleteTarget" labelled-by="delete-tag-title" @cancel="deleteTarget = null">
+      <h4 id="delete-tag-title">Delete tag "{{ deleteTarget.name }}"?</h4>
+      <p>{{ deleteConfirmText }}</p>
+      <div class="confirm-actions">
+        <button class="ghost" autofocus @click="deleteTarget = null">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i> Cancel
+        </button>
+        <button class="danger" @click="confirmDeleteTag">
+          <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete tag
+        </button>
       </div>
-    </div>
+    </ModalDialog>
   </div>
 </template>
 
@@ -611,27 +664,7 @@ button.ghost {
   flex: 1 1 10rem;
 }
 
-.confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  z-index: 100;
-}
-
-.confirm-dialog {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.2rem;
-  max-width: 34rem;
-  width: 100%;
-}
-
-.confirm-dialog h4 {
+#delete-tag-title {
   margin: 0 0 0.5rem;
 }
 

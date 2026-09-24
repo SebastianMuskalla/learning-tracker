@@ -9,11 +9,16 @@ lerna-debug.log*
 
 node_modules
 dist
+coverage
+# Playwright output
+test-results
+playwright-report
 dist-ssr
 *.local
 
 # Editor directories and files
 .vscode/*
+!.vscode/settings.json
 !.vscode/extensions.json
 .idea
 .DS_Store

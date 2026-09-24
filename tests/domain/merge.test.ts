@@ -370,11 +370,27 @@ describe('merge', () => {
       );
     });
 
+    it('the same tag created on both sides with a different case is a conflict, not a crash', () => {
+      const local = {
+        ...emptyBoard(),
+        tags: [{ name: unwrap(makeTagName('x')), color: unwrap(makeHexColor('#aacbee')) }],
+      };
+      const remote = {
+        ...emptyBoard(),
+        tags: [{ name: unwrap(makeTagName('X')), color: unwrap(makeHexColor('#aacbee')) }],
+      };
+
+      const result = merge(emptyBoard(), local, remote);
+
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.error.type).toBe('DivergentTagEdit');
+    });
+
     it('every successful merge of independent boards passes validateBoard', () => {
       fc.assert(
         fc.property(arbitraryBoard, arbitraryBoard, arbitraryBoard, (base, local, remote) => {
           const result = merge(base, local, remote);
-          if (result.ok) expect(validateBoard(result.value).ok).toBe(true);
+          return !result.ok || validateBoard(result.value).ok;
         }),
       );
     });

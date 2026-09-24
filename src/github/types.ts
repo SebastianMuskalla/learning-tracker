@@ -19,8 +19,11 @@ export interface GithubContentsPutResponse {
 
 export type GithubClientError =
   | { readonly type: 'Unauthorized' }
+  | { readonly type: 'Forbidden'; readonly message: string }
   | { readonly type: 'NotFound' }
   | { readonly type: 'Conflict' }
   | { readonly type: 'RateLimited'; readonly retryAfterSeconds: number | null }
   | { readonly type: 'Network'; readonly message: string }
+  /** The file content is not valid UTF-8. Writing it back would destroy the invalid bytes. */
+  | { readonly type: 'InvalidUtf8' }
   | { readonly type: 'Unknown'; readonly status: number; readonly message: string };

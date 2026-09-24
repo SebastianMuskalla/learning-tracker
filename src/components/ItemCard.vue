@@ -28,6 +28,7 @@ const editing = ref(false);
 const draft = ref(item.headline);
 const editError = ref('');
 const descPreviewEl = ref<HTMLElement | null>(null);
+const headlineInput = ref<HTMLInputElement | null>(null);
 const showDescHint = ref(false);
 
 const descriptionPreviewHtml = computed(() =>
@@ -83,6 +84,19 @@ function startEdit(event: MouseEvent): void {
   draft.value = item.headline;
   editError.value = '';
   editing.value = true;
+  // `autofocus` has no effect on an element that is added after the page loaded.
+  void nextTick(() => {
+    headlineInput.value?.focus();
+  });
+}
+
+/** Enter or Space on the focused card opens it, like a click. */
+function onCardKeydown(event: KeyboardEvent): void {
+  if (event.target !== event.currentTarget) return;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    emit('select');
+  }
 }
 
 function commitEdit(): void {
@@ -103,15 +117,22 @@ function cancelEdit(): void {
 </script>
 
 <template>
-  <li class="card" :class="section" @click="emit('select')">
+  <li
+    class="card"
+    :class="section"
+    tabindex="0"
+    role="button"
+    @click="emit('select')"
+    @keydown="onCardKeydown"
+  >
     <span class="handle" title="Drag to reorder" @click.stop>⠿</span>
 
     <div class="body">
       <input
         v-if="editing"
+        ref="headlineInput"
         v-model="draft"
         class="headline-input"
-        autofocus
         @click.stop
         @keyup.enter="commitEdit"
         @keyup.esc="cancelEdit"
@@ -172,6 +193,11 @@ function cancelEdit(): void {
   padding: 0.6rem 0.7rem;
   margin-bottom: 0.5rem;
   cursor: pointer;
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .handle {

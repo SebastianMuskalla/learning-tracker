@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useThemeStore } from '../../src/store/theme';

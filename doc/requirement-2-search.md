@@ -1,6 +1,9 @@
 # Requirement 2: Search
 
-Status: analysis and plan. Nothing is implemented yet.
+## Status
+
+Implemented, as planned below. The text below is the original analysis and plan. It describes the
+code as it was then.
 
 ## 1. What is asked
 

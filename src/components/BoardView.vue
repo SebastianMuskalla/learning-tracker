@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
 import { allItems, findItemById } from '../domain/types';
+import { githubFileUrl } from '../github/urls';
 import type { Board, ItemId, Section, TagName } from '../domain/types';
 import { itemMatches } from '../search/match';
 import { searchShortcutAction } from '../search/shortcut';
@@ -33,9 +34,7 @@ const selectedItem = computed(() =>
   selectedId.value === null ? null : (findItemById(boardStore.board, selectedId.value) ?? null),
 );
 
-const fileUrl = computed(
-  () => `https://github.com/${settings.owner}/${settings.repo}/blob/${settings.branch}/${settings.path}`,
-);
+const fileUrl = computed(() => githubFileUrl(settings));
 
 // Stale names (a tag deleted or renamed by hand since the filter was set) are ignored here, so a
 // stored name that no longer exists on the board never hides items.
@@ -69,19 +68,15 @@ const totalCount = computed(() => allItems(boardStore.board).length);
 const matchCount = computed(() => allItems(visibleBoard.value).length);
 const anyFilterActive = computed(() => searchStore.isActive || isTagFilterActive.value);
 
+// The page lifecycle listeners (tab hidden, page closing, …) are in composables/useSyncLifecycle.ts,
+// so that they are also active while the settings screen is open.
 onMounted(() => {
   void boardStore.load();
-  document.addEventListener('visibilitychange', onVisibilityChange);
   document.addEventListener('keydown', onGlobalKeydown);
-  window.addEventListener('pagehide', onPageHide);
-  window.addEventListener('beforeunload', onBeforeUnload);
 });
 
 onBeforeUnmount(() => {
-  document.removeEventListener('visibilitychange', onVisibilityChange);
   document.removeEventListener('keydown', onGlobalKeydown);
-  window.removeEventListener('pagehide', onPageHide);
-  window.removeEventListener('beforeunload', onBeforeUnload);
 });
 
 watch(
@@ -93,28 +88,6 @@ watch(
     }
   },
 );
-
-function onVisibilityChange(): void {
-  if (document.visibilityState === 'visible') {
-    // `refresh`, unlike `load`, skips itself while there is unwritten local work, so switching
-    // back to this tab mid-edit can never overwrite it with an older remote version.
-    void boardStore.refresh();
-  } else {
-    // The tab may never become visible again (close, navigate away). Get unsaved work out the
-    // door now, best-effort, rather than only on the next successful debounce.
-    boardStore.flushBeforeUnload();
-  }
-}
-
-function onPageHide(): void {
-  boardStore.flushBeforeUnload();
-}
-
-function onBeforeUnload(event: BeforeUnloadEvent): void {
-  if (!boardStore.hasUnsavedWork) return;
-  // No browser lets us show custom text any more; this is what triggers its own generic prompt.
-  event.preventDefault();
-}
 
 function onGlobalKeydown(event: KeyboardEvent): void {
   const shortcutAction = searchShortcutAction(event, searchBar.value?.hasFocus() ?? false);
@@ -139,11 +112,11 @@ function onGlobalKeydown(event: KeyboardEvent): void {
 function onAdd(headline: string): void {
   const result = makeHeadline(headline);
   if (!result.ok) return;
-  void boardStore.applyAndSync({ type: 'add', headline: result.value });
+  boardStore.applyAndSync({ type: 'add', headline: result.value });
 }
 
 function onReorder(section: Section, fromIndex: number, toIndex: number): void {
-  void boardStore.applyAndSync({ type: 'reorder', section, fromIndex, toIndex });
+  boardStore.applyAndSync({ type: 'reorder', section, fromIndex, toIndex });
 }
 
 function onSelect(id: ItemId): void {
@@ -151,45 +124,45 @@ function onSelect(id: ItemId): void {
 }
 
 function onComplete(id: ItemId): void {
-  void boardStore.applyAndSync({ type: 'complete', id });
+  boardStore.applyAndSync({ type: 'complete', id });
 }
 
 function onUncomplete(id: ItemId): void {
-  void boardStore.applyAndSync({ type: 'uncomplete', id });
+  boardStore.applyAndSync({ type: 'uncomplete', id });
 }
 
 function onDiscard(id: ItemId): void {
-  void boardStore.applyAndSync({ type: 'discard', id });
+  boardStore.applyAndSync({ type: 'discard', id });
 }
 
 function onRestore(id: ItemId): void {
-  void boardStore.applyAndSync({ type: 'restore', id });
+  boardStore.applyAndSync({ type: 'restore', id });
 }
 
 function onDelete(id: ItemId): void {
   selectedId.value = null;
-  void boardStore.applyAndSync({ type: 'delete', id });
+  boardStore.applyAndSync({ type: 'delete', id });
 }
 
 function onEditHeadline(id: ItemId, headline: string): void {
   const result = makeHeadline(headline);
   if (!result.ok) return;
-  void boardStore.applyAndSync({ type: 'editHeadline', id, headline: result.value });
+  boardStore.applyAndSync({ type: 'editHeadline', id, headline: result.value });
 }
 
 function onSetDescription(id: ItemId, text: string): void {
   const result = makeOptionalDescription(text);
   if (!result.ok) return;
-  void boardStore.applyAndSync({ type: 'setDescription', id, description: result.value });
+  boardStore.applyAndSync({ type: 'setDescription', id, description: result.value });
 }
 
 function onToggleTag(id: ItemId, tag: TagName): void {
   const item = findItemById(boardStore.board, id);
   if (!item) return;
   if (item.tags.includes(tag)) {
-    void boardStore.applyAndSync({ type: 'untagItem', id, tag });
+    boardStore.applyAndSync({ type: 'untagItem', id, tag });
   } else {
-    void boardStore.applyAndSync({ type: 'tagItem', id, tag });
+    boardStore.applyAndSync({ type: 'tagItem', id, tag });
   }
 }
 </script>
@@ -274,14 +247,14 @@ function onToggleTag(id: ItemId, tag: TagName): void {
       :item="selectedItem"
       :tags="boardStore.board.tags"
       @close="selectedId = null"
-      @edit-headline="(h: string) => onEditHeadline(selectedItem!.id, h)"
-      @set-description="(d: string) => onSetDescription(selectedItem!.id, d)"
-      @complete="onComplete(selectedItem!.id)"
-      @uncomplete="onUncomplete(selectedItem!.id)"
-      @discard="onDiscard(selectedItem!.id)"
-      @restore="onRestore(selectedItem!.id)"
-      @delete="onDelete(selectedItem!.id)"
-      @toggle-tag="(tag: TagName) => onToggleTag(selectedItem!.id, tag)"
+      @edit-headline="onEditHeadline"
+      @set-description="onSetDescription"
+      @complete="onComplete"
+      @uncomplete="onUncomplete"
+      @discard="onDiscard"
+      @restore="onRestore"
+      @delete="onDelete"
+      @toggle-tag="onToggleTag"
     />
 
     <ConflictBanner
@@ -300,7 +273,11 @@ function onToggleTag(id: ItemId, tag: TagName): void {
         :total-count="totalCount"
       />
 
-      <SyncStatusOverlay :sync-status="boardStore.syncStatus" :error-message="boardStore.errorMessage" />
+      <SyncStatusOverlay
+        :sync-status="boardStore.syncStatus"
+        :error-message="boardStore.errorMessage"
+        :notice="boardStore.notice"
+      />
     </div>
   </div>
 </template>

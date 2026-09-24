@@ -1,6 +1,8 @@
 dist
 node_modules
 coverage
+test-results
+playwright-report
 # Managed by pnpm.
 pnpm-lock.yaml
 # The parser test fixtures must keep their exact bytes. Prettier would add blank lines that the

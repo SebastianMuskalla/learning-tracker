@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import type { SyncStatus } from '../store/board';
 
-const { syncStatus, errorMessage } = defineProps<{
+const {
+  syncStatus,
+  errorMessage,
+  notice = null,
+} = defineProps<{
   readonly syncStatus: SyncStatus;
   readonly errorMessage: string | null;
+  /** A non-blocking message that is not an error. */
+  readonly notice?: string | null;
 }>();
 
 const STATUS_LABEL: Record<SyncStatus, string> = {
@@ -18,9 +24,10 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
 </script>
 
 <template>
-  <div v-if="syncStatus !== 'idle'" class="overlay" :class="syncStatus">
-    <span class="label">{{ STATUS_LABEL[syncStatus] }}</span>
+  <div v-if="syncStatus !== 'idle' || notice" class="overlay" :class="syncStatus" role="status">
+    <span v-if="syncStatus !== 'idle'" class="label">{{ STATUS_LABEL[syncStatus] }}</span>
     <span v-if="errorMessage" class="message">{{ errorMessage }}</span>
+    <span v-if="notice" class="message">{{ notice }}</span>
   </div>
 </template>
 

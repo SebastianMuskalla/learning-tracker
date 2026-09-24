@@ -9,6 +9,24 @@ export type BoardValidationError =
   | { readonly type: 'UndefinedItemTag'; readonly id: string; readonly name: string }
   | { readonly type: 'DuplicateItemTag'; readonly id: string; readonly name: string };
 
+/** A short text for the user that explains a board validation error. */
+export function describeBoardValidationError(error: BoardValidationError): string {
+  switch (error.type) {
+    case 'DuplicateId':
+      return `the id ${error.id} is used by more than one item`;
+    case 'MisplacedItem':
+      return `item ${error.id} belongs in section ${error.expectedSection}`;
+    case 'ActiveItemInWrongArray':
+      return `item ${error.id} is in the wrong one of New and WIP`;
+    case 'DuplicateTagName':
+      return `the tag "${error.name}" is defined more than once`;
+    case 'UndefinedItemTag':
+      return `item ${error.id} uses the undefined tag "${error.name}"`;
+    case 'DuplicateItemTag':
+      return `item ${error.id} has the tag "${error.name}" more than once`;
+  }
+}
+
 export function emptyBoard(): Board {
   return { tags: [], new: [], wip: [], complete: [], discarded: [] };
 }

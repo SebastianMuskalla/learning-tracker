@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { displayLanguageName, highlightCodeBlocks, renderMarkdown } from '../../src/markdown/render';
 import { markHits } from '../../src/search/markDom';

@@ -95,32 +95,53 @@ describe('parse — valid files', () => {
 });
 
 describe('parse — invalid files', () => {
-  const invalidFixtures = [
-    'missing-section.md',
-    'wrong-section-order.md',
-    'unknown-line.md',
-    'duplicate-id.md',
-    'unterminated-desc.md',
-    'complete-without-desc.md',
-    'complete-without-completed-tag.md',
-    'malformed-meta.md',
-    'both-completed-and-discarded.md',
-    'bad-header.md',
-    'unknown-tag-on-item.md',
-    'duplicate-tag-definition.md',
-    'invalid-tag-color.md',
-    'invalid-tag-name.md',
-    'duplicate-tag-on-item.md',
-    'tag-definition-after-new.md',
+  // Each fixture must fail for its own reason. Checking the reason (not only `ok === false`)
+  // makes sure a fixture that was changed by accident, for example by a formatter, fails the test.
+  const invalidFixtures: readonly (readonly [name: string, line: number, reason: string])[] = [
+    ['missing-section.md', 11, 'Expected section heading "## Discarded", found end of file'],
+    ['wrong-section-order.md', 5, 'Expected section heading "## New", found "## WIP"'],
+    ['unknown-line.md', 7, 'Expected section heading "## WIP", found "this line is not an item'],
+    ['duplicate-id.md', 12, 'Duplicate id "01M2KCX2QA8VMTXY950V44DB2J"'],
+    ['unterminated-desc.md', 18, 'Unterminated description block'],
+    ['complete-without-desc.md', 13, 'A Complete item must have a description'],
+    ['complete-without-completed-tag.md', 16, 'Item under Complete is missing the required metadata'],
+    ['malformed-meta.md', 8, 'Malformed metadata comment'],
+    ['both-completed-and-discarded.md', 12, 'An item cannot have both completed: and discarded: metadata'],
+    ['bad-header.md', 1, 'Expected "# Learning", found "# My Learning Log"'],
+    ['unknown-tag-on-item.md', 10, 'Unknown tag "rust" on item "Some item"'],
+    ['duplicate-tag-definition.md', 6, 'Duplicate tag "Vue"'],
+    ['invalid-tag-color.md', 5, 'Invalid tag color: "#zzzzzz" is not a valid color (expected #rrggbb)'],
+    [
+      'invalid-tag-name.md',
+      5,
+      'Expected section heading "## New", found "<!-- tag:web dev color:#aacbee -->"',
+    ],
+    ['duplicate-tag-on-item.md', 10, 'Duplicate tag "vue" on item "Some item"'],
+    [
+      'tag-definition-after-new.md',
+      7,
+      'Expected section heading "## WIP", found "<!-- tag:vue color:#aacbee -->"',
+    ],
   ];
 
-  for (const name of invalidFixtures) {
-    it(`rejects ${name} with a line-numbered error`, () => {
+  for (const [name, line, reason] of invalidFixtures) {
+    it(`rejects ${name} at line ${String(line)} for the expected reason`, () => {
       const result = parse(fixture(name));
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(typeof result.error.line).toBe('number');
-      expect(result.error.reason.length).toBeGreaterThan(0);
+      expect(result.error.line).toBe(line);
+      expect(result.error.reason).toContain(reason);
     });
   }
+});
+
+describe('parse — error messages (E8)', () => {
+  it('never shows internal JSON to the user', () => {
+    const text = fixture('valid.md').replace('created:2026-09-15', 'created:2026-13-45');
+    const result = parse(text);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.reason).toContain('"2026-13-45" is not a valid timestamp');
+    expect(result.error.reason).not.toContain('{');
+  });
 });

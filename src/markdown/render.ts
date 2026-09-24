@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 import type { RendererRule as RenderRule } from 'markdown-it';
+import type { HLJSApi } from 'highlight.js';
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
 
@@ -115,7 +116,14 @@ export function renderMarkdown(text: string): string {
  */
 export async function highlightCodeBlocks(container: HTMLElement): Promise<void> {
   if (container.querySelector('pre code[class*="language-"]') === null) return;
-  const hljs = (await import('highlight.js/lib/common')).default;
+  let hljs: HLJSApi;
+  try {
+    hljs = (await import('highlight.js/lib/common')).default;
+  } catch {
+    // The chunk can be missing, for example in a tab that was opened before a new deploy.
+    // Highlighting is optional, so show the code without it.
+    return;
+  }
   // Queried after the import, since the DOM may have changed while it was loading.
   const blocks = container.querySelectorAll<HTMLElement>(
     'pre code[class*="language-"]:not([data-highlighted])',

@@ -13,6 +13,30 @@ export type ValidationError =
   | { readonly type: 'InvalidTagName'; readonly value: string }
   | { readonly type: 'InvalidHexColor'; readonly value: string };
 
+/** A short text for the user that explains a validation error. */
+export function describeValidationError(error: ValidationError): string {
+  switch (error.type) {
+    case 'EmptyHeadline':
+      return 'the headline is empty';
+    case 'MultilineHeadline':
+      return 'the headline has more than one line';
+    case 'HeadlineContainsComment':
+      return 'the headline contains "<!--"';
+    case 'EmptyDescription':
+      return 'the description is empty';
+    case 'DescriptionContainsEndMarker':
+      return `the description contains the reserved end marker "${DESC_END_MARKER}"`;
+    case 'InvalidIsoTimestamp':
+      return `"${error.value}" is not a valid timestamp (expected YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DD)`;
+    case 'InvalidItemId':
+      return `"${error.value}" is not a valid item id (expected a ULID)`;
+    case 'InvalidTagName':
+      return `"${error.value}" is not a valid tag name (letters, digits, "_" or "-", up to 32 characters)`;
+    case 'InvalidHexColor':
+      return `"${error.value}" is not a valid color (expected #rrggbb)`;
+  }
+}
+
 const DESC_END_MARKER = '<!-- /desc -->';
 // Full UTC timestamp, as written by this app from here on: `2026-09-16T14:32:07Z`.
 const ISO_TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;

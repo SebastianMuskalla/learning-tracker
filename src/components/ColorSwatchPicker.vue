@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { HexColor } from '../domain/types';
 import { TAG_PALETTE } from '../tags/palette';
 
-const modelValue = defineModel<string>({ required: true });
+const modelValue = defineModel<HexColor>({ required: true });
 </script>
 
 <template>

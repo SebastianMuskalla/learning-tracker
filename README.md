@@ -72,7 +72,9 @@ anything else on your GitHub account.
 **If the token stops working:** a token can expire, or you can revoke it.
 When that happens, the app's next request gets a 401 (Unauthorized) error.
 The app then shows the setup screen again with a message that explains why.
-Paste in a new token to continue.
+Paste in a new token to continue. The same happens with a 403 (Forbidden)
+error, for example when the token has only read access to Contents. Changes
+that were not saved yet are kept, and the app saves them with the new token.
 
 ## Step 3: Deploy the app to GitHub Pages
 
@@ -119,6 +121,13 @@ the build about it, using either option:
 3. Click **Test connection**. The app tries to read the file and reports
    the result.
 4. Click **Save & continue**.
+
+Owner and repository names may contain only letters, digits, `.`, `_`, and
+`-`, as on GitHub.
+
+You can change these settings later. If you switch to another repository,
+branch, or file while changes are not saved yet, the app first saves them
+to the old file. If that fails, it stays on the old file and tells you why.
 
 The app now loads your topics and is ready to use.
 
@@ -173,6 +182,20 @@ HTML/XML, and CSS (the "common" set of
   label, but no colors.
 - The card previews on the board show code as plain text, without a box.
 
+## Editing in the detail view
+
+Click a card (or move to it with **Tab** and press **Enter** or **Space**)
+to open its detail view. The headline and the description are saved when
+you leave the field, press **Ctrl+S** (**Cmd+S** on macOS), click **Send**,
+close the detail view, or open another item. A field that you did not
+change creates no commit.
+
+If an open item changes while you edit it (for example, because a change
+from GitHub was merged in), the field follows the new value as long as you
+have not typed anything. If you have, the app keeps your text and shows
+"This description changed on GitHub" with two buttons: **Use theirs**
+replaces your text with the new value, **Keep mine** saves your text.
+
 ## Search
 
 A floating search bar sits in the bottom-left corner of the board, next to
@@ -224,19 +247,57 @@ or with anyone you share the repository with.
 
 ## Development
 
+Use Node 24 (see `.nvmrc`; with nvm: `nvm use`) and pnpm.
+
 ```sh
 pnpm install
-pnpm dev          # local dev server
-pnpm lint         # eslint --max-warnings 0
-pnpm typecheck    # vue-tsc -b --noEmit
-pnpm test         # vitest run
-pnpm build        # production build (also runs vue-tsc -b)
+pnpm dev             # local dev server
+pnpm format          # prettier --write .
+pnpm format:check    # prettier --check . (CI runs this)
+pnpm lint            # eslint --max-warnings 0
+pnpm lint:fix        # eslint --fix
+pnpm typecheck       # vue-tsc -b --noEmit
+pnpm test            # vitest run
+pnpm test:watch      # vitest in watch mode
+pnpm test:coverage   # vitest run --coverage (fails below the thresholds in vite.config.ts)
+pnpm build           # production build (also runs vue-tsc -b)
+pnpm test:e2e        # browser tests against the build; run `pnpm build` first
 ```
 
-`.github/workflows/ci.yml` runs lint, typecheck, test, and build on every
-push and pull request. `.github/workflows/deploy.yml` builds the app and
-publishes `dist/` to GitHub Pages on every push to `main` (see Step 3
-above).
+`pnpm check` runs all of the above in one go, in this order: `lint:fix`,
+`lint`, `format`, `format:check`, `typecheck`, `test`, `build`, `test:e2e`.
+It stops at the first step that fails. Run it before you push. It fixes
+lint and formatting problems in your files, so CI runs the separate
+checks instead.
+
+Before the first `pnpm test:e2e`, install the browser once:
+`pnpm exec playwright install chromium`. The browser tests (in `e2e/`)
+replace the GitHub API with a fake, so they need no token and no network.
+
+`pnpm install` also installs a git pre-commit hook (`simple-git-hooks` and
+`lint-staged`). It runs ESLint and Prettier on the staged files.
+
+The editor settings in `.vscode/` format on save with Prettier. To make
+`git blame` skip the commit that only reformatted the code, run
+`git config blame.ignoreRevsFile .git-blame-ignore-revs` once.
+
+`.github/workflows/ci.yml` runs the format check, lint, typecheck, the tests
+with coverage, the build, and the browser tests on every push and pull
+request. `.github/workflows/deploy.yml` runs the same checks first, and only
+then builds the app and publishes `dist/` to GitHub Pages on every push to
+`main` (see Step 3 above). Dependabot (`.github/dependabot.yml`) opens
+update pull requests every week.
+
+About two dependencies:
+
+- **TypeScript** stays on 6.x until `vue-tsc` and `typescript-eslint`
+  support TypeScript 7.
+- **@types/node** stays on the major version that matches the Node version
+  in `.nvmrc`.
+
+To make sure that failing checks never reach `main`, protect the branch in
+the app repository's **Settings → Branches**, and require the CI check to
+pass.
 
 **Dev-mode note:** the Content-Security-Policy (CSP) tag in `index.html`
 (see "Security" below) is active in `pnpm dev` too. It blocks two things
@@ -247,6 +308,72 @@ production build. Because auto-reload is blocked, refresh the page by hand
 after you save a file. This is deliberate. The same strict CSP that
 protects the live app also runs locally. The app does not relax it for
 convenience.
+
+## Architecture
+
+The code is split into layers. Each layer uses only the layers above it in
+this table.
+
+| Folder                                      | What it holds                                                                                                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/domain/`                               | The data model (`types.ts`), validated factories for the branded types, the commands (`applyCommand`), and the 3-way `merge`. No I/O.         |
+| `src/format/`                               | `parse` and `serialize` for `learning.md`, and the commit messages.                                                                           |
+| `src/github/`                               | The GitHub Contents API client. It returns a `Result`, never throws for an HTTP error, and checks the shape of every response.                |
+| `src/store/`                                | Pinia stores. `board.ts` holds the board and runs every read and write; `settings.ts`, `theme.ts`, `tagFilter.ts`, and `search.ts` are small. |
+| `src/composables/`                          | `useSyncLifecycle`: connects the board store to page events (tab hidden, page closing, back online, other tabs).                              |
+| `src/components/`                           | The Vue components.                                                                                                                           |
+| `src/markdown/`, `src/search/`, `src/tags/` | Markdown rendering, search matching and highlighting, tag helpers.                                                                            |
+
+Two patterns are used everywhere:
+
+- **Branded types.** A value such as `Headline` or `ItemId` is a `string`
+  with a type-only brand. The only way to get one is a factory in
+  `src/domain/factories.ts`, which validates the value. So a `Headline` is
+  always valid.
+- **`Result` instead of exceptions.** Functions that can fail return
+  `{ ok: true, value }` or `{ ok: false, error }` (`src/domain/result.ts`).
+  The error types are unions, and a `switch` over them is checked for
+  completeness by ESLint.
+
+The write path:
+
+```
+UI event
+  → boardStore.applyAndSync(command)
+      applyCommand(board, command)            the board changes at once
+      the command is added to pendingCommands
+  → debounce (800 ms quiet, at most 5 s or 10 commands)
+  → queue: flushPending()
+      pendingCommands → inFlightCommands
+      serialize → parse again → compare       the round-trip check
+      putFile(text, sha)
+        ok        → confirmed board = written board
+        409       → getFile → merge(base, ours, theirs) → putFile again
+        temporary → keep the commands, retry later
+        permanent → drop the in-flight commands
+  → rebaseLocal: board = confirmed board + pendingCommands
+```
+
+The board that you see is always the confirmed board (what GitHub has at
+`sha`) plus the commands that are not saved yet. When the confirmed board
+changes, the store applies those commands again on top of it. So a change
+you make while a request is in flight is never lost.
+
+To add a new command:
+
+1. Add it to the `Command` type and handle it in `applyCommand`
+   (`src/domain/commands.ts`). If it creates something new with a random
+   id, let the command carry the id (like `add`), so that applying it again
+   gives the same result.
+2. Add its commit message in `src/format/commitMessage.ts`.
+3. Check that `merge` (`src/domain/merge.ts`) handles the change it makes.
+   If it changes the file format, update `parse`, `serialize`, and the
+   format description below.
+4. Add tests in `tests/domain/`, `tests/format/`, and, for the UI,
+   `tests/components/`.
+5. Call `boardStore.applyAndSync(...)` from the component.
+
+The analysis and plans behind the larger changes are in `doc/`.
 
 ## The `learning.md` file format
 
@@ -309,7 +436,8 @@ Rules for hand edits:
 
 Before every save, the app reads back what it is about to write and
 compares it with its own in-memory data. If the two do not match exactly,
-the app stops and saves nothing. This check runs on every save, and a
+the app stops and saves nothing. This check runs on every save (also on
+the last, best-effort save when the page closes, and on a merged save), and a
 dedicated test (`tests/format/roundtrip.property.test.ts`) checks it against
 10,000 generated examples, including deliberately awkward ones (headings,
 code fences, and Unicode text inside descriptions).
@@ -319,19 +447,39 @@ this happens, the app shows the error with a line number. It links to the
 file on github.com. It blocks all further writes until you fix the file.
 Your last good version is always in the repository's git history.
 
+Two more limits:
+
+- The file must be UTF-8 text. If it is not (for example, after it was
+  saved as Latin-1 by hand), the app shows an error and blocks all writes.
+  It does not replace the characters it cannot read, because the next save
+  would then destroy them.
+- The file can be at most 1 MB. The GitHub Contents API does not return the
+  content of larger files. The app then shows an error.
+
 ## Saving and conflicts
 
 The app does not send one commit per click. It waits about a second after
 your last change, then writes everything from that burst as one commit. A
 long burst of changes, or ten changes in a row, forces a write sooner, so
 nothing waits too long. While a write is pending or in progress, the bottom
-corner shows "Unsaved changes…" or "Saving…".
+corner shows "Unsaved changes…" or "Saving…". You can keep working while a
+write runs: changes you make in the meantime are kept and go into the next
+commit.
 
-If you try to close the tab (or reload it) while a write is still pending,
-the browser asks you to confirm, so you do not lose it by accident. The app
-also tries to send the pending write right away when the tab is hidden or
-closed, as a best effort; the confirmation prompt is the backstop for when
-that does not finish in time.
+When you switch to another tab, the app writes pending changes right away.
+When the page closes, it sends them one last time, as a best effort (only
+if they fit into the 64 KB that browsers allow for this kind of request).
+If you try to close the tab (or reload it) while something is not saved
+yet, the browser asks you to confirm. This also applies while the settings
+page is open, while the conflict dialog is open, and while you have typed
+into a field of the detail view that was not saved yet.
+
+If a save fails for a reason that can pass (no network, a GitHub server
+error, a rate limit), your changes stay on the board. The corner shows
+"Not saved — will retry", and the app tries again after 2, 5, 15, and then
+every 60 seconds, and at once when the browser is back online. A long rate
+limit shows the time of the next try. Only an error that cannot pass (for
+example, the branch does not exist) undoes the changes of that save.
 
 Sometimes a write is rejected because the file changed on GitHub in the
 meantime. Most of the time this is not a real conflict — for example, GitHub
@@ -345,11 +493,19 @@ reads the current file, and:
   same way twice), it combines both automatically and retries;
 - only when the _same_ topic was changed differently in both places does it
   ask you. It then shows your version and GitHub's version side by side, and
-  you pick which one to keep — the other is discarded.
+  you pick which one to keep — the other is discarded. **Keep GitHub's
+  version** reads the file again, so you always get the newest version.
+  Changes you make while the dialog is open wait, and are saved after your
+  choice.
 
 Refreshing the page, or switching back to the tab after a while, re-reads
-`learning.md` from GitHub — unless a write is still pending, so a refresh
-can never throw away work you have not saved yet.
+`learning.md` from GitHub. This is skipped while changes are not saved yet
+and while the conflict dialog is open, so a refresh never throws away your
+work. If a change no longer fits the newest version (for example, you
+renamed a topic that was deleted on GitHub), the app drops it and tells you.
+
+If the app is open in several tabs of the same browser, a tab that saves
+tells the other tabs, and they read the new version.
 
 ## Security
 
@@ -368,7 +524,6 @@ can never throw away work you have not saved yet.
   a reload. Someone can steal your token from a device. If that happens,
   they get read and write access to one file, in one private repository.
   They get nothing else. Use the narrow permissions from Step 2.
-
-## Future ideas
-
-- Code review
+- If the browser does not let the app use `localStorage` (some private
+  modes do this), the app still starts. It keeps the token in memory only
+  and tells you; you then enter it again after a reload.

@@ -1,25 +1,29 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
-import { sectionOf, type Item, type Section, type Tag, type TagName } from '../domain/types';
+import { sectionOf, type Item, type ItemId, type Section, type Tag, type TagName } from '../domain/types';
 import { formatTimestamp } from '../format/displayTimestamp';
 import { highlightCodeBlocks, renderMarkdown } from '../markdown/render';
 import { markHits } from '../search/markDom';
+import { useBoardStore } from '../store/board';
 import { useSearchStore } from '../store/search';
+import ModalDialog from './ModalDialog.vue';
 import TagChip from './TagChip.vue';
 
 const { item, tags } = defineProps<{ readonly item: Item; readonly tags: readonly Tag[] }>();
 
+// Every event names the item. A draft can then still be saved for the right item after the
+// parent has already switched to another one.
 const emit = defineEmits<{
   close: [];
-  editHeadline: [headline: string];
-  setDescription: [description: string];
-  complete: [];
-  uncomplete: [];
-  discard: [];
-  restore: [];
-  delete: [];
-  toggleTag: [tag: TagName];
+  editHeadline: [id: ItemId, headline: string];
+  setDescription: [id: ItemId, description: string];
+  complete: [id: ItemId];
+  uncomplete: [id: ItemId];
+  discard: [id: ItemId];
+  restore: [id: ItemId];
+  delete: [id: ItemId];
+  toggleTag: [id: ItemId, tag: TagName];
 }>();
 
 const SECTION_LABEL: Record<Section, string> = {
@@ -31,15 +35,45 @@ const SECTION_LABEL: Record<Section, string> = {
 
 const statusLabel = computed(() => SECTION_LABEL[sectionOf(item)]);
 const searchStore = useSearchStore();
+const boardStore = useBoardStore();
 
-const headlineDraft = ref(item.headline);
+const headlineDraft = ref<string>(item.headline);
 const descriptionDraft = ref<string>(item.description ?? '');
 const descError = ref('');
 const headlineError = ref('');
+/** Set when the stored value changed (for example, after a merge) while the draft had changes. */
+const headlineChangedElsewhere = ref(false);
+const descriptionChangedElsewhere = ref(false);
 const livePreviewEl = ref<HTMLElement | null>(null);
 const staticPreviewEl = ref<HTMLElement | null>(null);
 const showDeleteConfirm = ref(false);
 const descriptionEditing = ref(item.status !== 'complete');
+/** True once the drawer is being removed. Its drafts are saved then, and never again. */
+let unmounting = false;
+
+/** The value a draft would be stored as. Used to compare a draft with the stored value. */
+function normalizedHeadline(draft: string): string {
+  const result = makeHeadline(draft);
+  return result.ok ? result.value : draft.trim();
+}
+
+function normalizedDescription(draft: string): string {
+  const result = makeOptionalDescription(draft);
+  return result.ok ? (result.value ?? '') : draft;
+}
+
+const headlineDirty = computed(() => normalizedHeadline(headlineDraft.value) !== item.headline);
+const descriptionDirty = computed(
+  () => normalizedDescription(descriptionDraft.value) !== (item.description ?? ''),
+);
+
+// Tell the store about drafts that are not saved yet, so that closing the tab asks first.
+watch(headlineDirty, (dirty) => {
+  boardStore.setDraftDirty('drawer-headline', dirty);
+});
+watch(descriptionDirty, (dirty) => {
+  boardStore.setDraftDirty('drawer-description', dirty);
+});
 
 const renderedHtml = computed(() => renderMarkdown(descriptionDraft.value));
 
@@ -79,28 +113,81 @@ watch(
 );
 
 watch(
-  () => item.id,
-  () => {
-    headlineDraft.value = item.headline;
-    descriptionDraft.value = item.description ?? '';
-    descError.value = '';
-    headlineError.value = '';
-    showDeleteConfirm.value = false;
-    descriptionEditing.value = item.status !== 'complete';
+  (): readonly [ItemId, string, string] => [item.id, item.headline, item.description ?? ''],
+  ([id, headline, description], [oldId, oldHeadline, oldDescription]) => {
+    if (id !== oldId) {
+      // Another item was selected. Save the drafts of the previous one first.
+      saveDraftsFor(oldId, oldHeadline, oldDescription);
+      headlineDraft.value = headline;
+      descriptionDraft.value = description;
+      descError.value = '';
+      headlineError.value = '';
+      headlineChangedElsewhere.value = false;
+      descriptionChangedElsewhere.value = false;
+      showDeleteConfirm.value = false;
+      descriptionEditing.value = item.status !== 'complete';
+      return;
+    }
+
+    // The same item changed in the store, for example after a merge with a change from GitHub.
+    // A draft without changes follows the stored value. A draft with changes is kept, and the
+    // user is told (unless the new stored value is the draft itself, which is our own save).
+    const headlineNow = normalizedHeadline(headlineDraft.value);
+    if (headlineNow === oldHeadline) {
+      headlineDraft.value = headline;
+    } else if (headlineNow !== headline) {
+      headlineChangedElsewhere.value = true;
+    }
+    const descriptionNow = normalizedDescription(descriptionDraft.value);
+    if (descriptionNow === oldDescription) {
+      descriptionDraft.value = description;
+    } else if (descriptionNow !== description) {
+      descriptionChangedElsewhere.value = true;
+    }
   },
 );
 
+/** Saves drafts with changes. `headline`/`description` are the stored values the drafts are
+ *  compared with. */
+function saveDraftsFor(id: ItemId, headline: string, description: string): void {
+  const headlineResult = makeHeadline(headlineDraft.value);
+  if (headlineResult.ok && headlineResult.value !== headline) {
+    emit('editHeadline', id, headlineResult.value);
+  }
+  if (normalizedDescription(descriptionDraft.value) !== description) {
+    emit('setDescription', id, descriptionDraft.value);
+  }
+}
+
+function saveDrafts(): void {
+  if (unmounting) return;
+  saveDraftsFor(item.id, item.headline, item.description ?? '');
+}
+
+// Every way of closing the drawer (Escape, the X button, selecting nothing, deleting) unmounts it,
+// so this is the one place that saves the drafts on close.
+onBeforeUnmount(() => {
+  saveDrafts();
+  // A `blur` that the browser fires while the elements are removed must not save a second time.
+  unmounting = true;
+  boardStore.setDraftDirty('drawer-headline', false);
+  boardStore.setDraftDirty('drawer-description', false);
+});
+
 function saveHeadline(): void {
+  if (unmounting) return;
   const result = makeHeadline(headlineDraft.value);
   if (!result.ok) {
     headlineError.value = 'Headline cannot be empty.';
     return;
   }
   headlineError.value = '';
-  if (result.value !== item.headline) emit('editHeadline', result.value);
+  headlineChangedElsewhere.value = false;
+  if (result.value !== item.headline) emit('editHeadline', item.id, result.value);
 }
 
 function saveDescription(): void {
+  if (unmounting) return;
   if (item.status === 'complete' && descriptionDraft.value.trim() === '') {
     descError.value = 'A completed item must keep a description.';
     return;
@@ -111,26 +198,42 @@ function saveDescription(): void {
     return;
   }
   descError.value = '';
-  emit('setDescription', descriptionDraft.value);
+  descriptionChangedElsewhere.value = false;
+  // No command (and no line in the commit message) when nothing changed.
+  if ((result.value ?? '') !== (item.description ?? ''))
+    emit('setDescription', item.id, descriptionDraft.value);
+}
+
+function useStoredHeadline(): void {
+  headlineDraft.value = item.headline;
+  headlineChangedElsewhere.value = false;
+}
+
+function useStoredDescription(): void {
+  descriptionDraft.value = item.description ?? '';
+  descriptionChangedElsewhere.value = false;
+}
+
+function close(): void {
+  emit('close');
 }
 
 function discardInstead(): void {
   showDeleteConfirm.value = false;
-  emit('discard');
+  emit('discard', item.id);
 }
 
 function confirmDelete(): void {
   showDeleteConfirm.value = false;
-  emit('delete');
+  // The item goes away, so its drafts must not be saved when the drawer unmounts.
+  headlineDraft.value = item.headline;
+  descriptionDraft.value = item.description ?? '';
+  emit('delete', item.id);
 }
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
-    if (showDeleteConfirm.value) {
-      showDeleteConfirm.value = false;
-    } else {
-      emit('close');
-    }
+    close();
   } else if ((event.ctrlKey || event.metaKey) && event.key === 's') {
     event.preventDefault();
     saveDescription();
@@ -143,11 +246,16 @@ function onKeydown(event: KeyboardEvent): void {
     <div class="drawer-header">
       <span class="status-badge" :class="sectionOf(item)">{{ statusLabel }}</span>
       <input v-model="headlineDraft" class="headline" @blur="saveHeadline" @keyup.enter="saveHeadline" />
-      <button class="close" title="Close (Esc)" @click="emit('close')">
+      <button class="close" title="Close (Esc)" aria-label="Close" @click="close">
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
       </button>
     </div>
     <p v-if="headlineError" class="error">{{ headlineError }}</p>
+    <p v-if="headlineChangedElsewhere" class="changed-elsewhere">
+      This headline changed on GitHub.
+      <button type="button" class="ghost" @click="useStoredHeadline">Use theirs</button>
+      <button type="button" class="ghost" @click="saveHeadline">Keep mine</button>
+    </p>
 
     <dl class="dates">
       <dt>Created</dt>
@@ -171,7 +279,7 @@ function onKeydown(event: KeyboardEvent): void {
           :color="tag.color"
           :mode="item.tags.includes(tag.name) ? 'normal' : 'muted'"
           interactive
-          @click="emit('toggleTag', tag.name)"
+          @click="emit('toggleTag', item.id, tag.name)"
         />
       </template>
       <p v-else class="hint">No tags yet — create tags in the settings.</p>
@@ -206,19 +314,28 @@ function onKeydown(event: KeyboardEvent): void {
       </div>
     </template>
     <p v-if="descError" class="error">{{ descError }}</p>
+    <p v-if="descriptionChangedElsewhere" class="changed-elsewhere">
+      This description changed on GitHub.
+      <button type="button" class="ghost" @click="useStoredDescription">Use theirs</button>
+      <button type="button" class="ghost" @click="saveDescription">Keep mine</button>
+    </p>
 
     <h3>Actions</h3>
     <div class="actions">
-      <button v-if="item.status === 'active'" :disabled="item.description === null" @click="emit('complete')">
+      <button
+        v-if="item.status === 'active'"
+        :disabled="item.description === null"
+        @click="emit('complete', item.id)"
+      >
         <i class="fa-solid fa-check" aria-hidden="true"></i> Complete
       </button>
-      <button v-if="item.status === 'complete'" @click="emit('uncomplete')">
+      <button v-if="item.status === 'complete'" @click="emit('uncomplete', item.id)">
         <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reopen
       </button>
-      <button v-if="item.status === 'discarded'" @click="emit('restore')">
+      <button v-if="item.status === 'discarded'" @click="emit('restore', item.id)">
         <i class="fa-solid fa-trash-arrow-up" aria-hidden="true"></i> Restore
       </button>
-      <button v-if="item.status !== 'discarded'" class="danger" @click="emit('discard')">
+      <button v-if="item.status !== 'discarded'" class="danger" @click="emit('discard', item.id)">
         <i class="fa-solid fa-ban" aria-hidden="true"></i> Discard
       </button>
       <button class="danger" @click="showDeleteConfirm = true">
@@ -226,23 +343,21 @@ function onKeydown(event: KeyboardEvent): void {
       </button>
     </div>
 
-    <div v-if="showDeleteConfirm" class="confirm-overlay">
-      <div class="confirm-dialog">
-        <h4>Delete "{{ item.headline }}"?</h4>
-        <p>This permanently removes the item and its description. This cannot be undone.</p>
-        <div class="confirm-actions">
-          <button class="ghost" @click="showDeleteConfirm = false">
-            <i class="fa-solid fa-xmark" aria-hidden="true"></i> Cancel
-          </button>
-          <button v-if="item.status !== 'discarded'" class="ghost" @click="discardInstead">
-            <i class="fa-solid fa-ban" aria-hidden="true"></i> Discard instead
-          </button>
-          <button class="danger" @click="confirmDelete">
-            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete permanently
-          </button>
-        </div>
+    <ModalDialog v-if="showDeleteConfirm" labelled-by="delete-item-title" @cancel="showDeleteConfirm = false">
+      <h4 id="delete-item-title">Delete "{{ item.headline }}"?</h4>
+      <p>This permanently removes the item and its description. This cannot be undone.</p>
+      <div class="confirm-actions">
+        <button class="ghost" autofocus @click="showDeleteConfirm = false">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i> Cancel
+        </button>
+        <button v-if="item.status !== 'discarded'" class="ghost" @click="discardInstead">
+          <i class="fa-solid fa-ban" aria-hidden="true"></i> Discard instead
+        </button>
+        <button class="danger" @click="confirmDelete">
+          <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete permanently
+        </button>
       </div>
-    </div>
+    </ModalDialog>
   </aside>
 </template>
 
@@ -442,27 +557,24 @@ button.primary {
   font-size: 0.8rem;
 }
 
-.confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+.changed-elsewhere {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  z-index: 100;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
-.confirm-dialog {
-  background: var(--surface);
+.changed-elsewhere button.ghost {
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.2rem;
-  max-width: 34rem;
-  width: 100%;
+  border-radius: 6px;
+  padding: 0.2em 0.7em;
+  color: var(--text);
 }
 
-.confirm-dialog h4 {
+#delete-item-title {
   margin: 0 0 0.5rem;
 }
 

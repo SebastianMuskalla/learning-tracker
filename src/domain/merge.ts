@@ -152,10 +152,17 @@ function mergeTags(
   const allNames = new Set<TagName>([...baseTags.keys(), ...localTags.keys(), ...remoteTags.keys()]);
 
   const merged: Tag[] = [];
+  const mergedLower = new Set<string>();
   for (const name of allNames) {
     const resolved = resolveTag(name, baseTags.get(name), localTags.get(name), remoteTags.get(name));
     if (!resolved.ok) return resolved;
-    if (resolved.value !== null) merged.push(resolved.value);
+    if (resolved.value === null) continue;
+    // Tag names are unique regardless of case. The two sides created the same tag with a
+    // different case (for example "vue" here and "Vue" on GitHub): the user has to choose.
+    const lower = resolved.value.name.toLowerCase();
+    if (mergedLower.has(lower)) return err({ type: 'DivergentTagEdit', name: resolved.value.name });
+    mergedLower.add(lower);
+    merged.push(resolved.value);
   }
   return ok(merged);
 }

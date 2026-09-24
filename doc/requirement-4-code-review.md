@@ -4,6 +4,20 @@ This is a review of the full codebase, including the uncommitted work in
 the working tree (the code-block labels in `src/markdown/render.ts`). It
 lists each problem found and a step-by-step fix. No code was changed.
 
+## Status
+
+All findings are fixed, in the order of section 13. The formatting commit is listed in
+`.git-blame-ignore-revs`. These steps are not code and must be done by hand:
+
+- P1, step 4: protect `main` in the GitHub settings, and require the CI check to pass.
+- P2, step 6: switch the local machine to Node 24 (`nvm install 24 && nvm use 24`).
+
+Fixed beyond this review: `merge` threw an exception when both sides created the same tag with a
+different case (for example `vue` and `Vue`). It now reports a conflict. The property test in
+`tests/domain/merge.test.ts` found it; it made the test suite fail now and then.
+
+The text below is the original review. It describes the code as it was then.
+
 ## 1. How the review was done
 
 - Read every file in `src/`, `tests/`, `.github/`, the config files, the

@@ -8,7 +8,8 @@ defineProps<{
 
 <template>
   <div class="banner">
-    <strong>learning.md failed to parse (line {{ line }}).</strong>
+    <strong v-if="line > 0">learning.md failed to parse (line {{ line }}).</strong>
+    <strong v-else>learning.md cannot be read.</strong>
     <span>{{ reason }}</span>
     <a :href="fileUrl" target="_blank" rel="noopener noreferrer">View the file on GitHub</a>
     <span>All writes are blocked until the file is fixed by hand.</span>

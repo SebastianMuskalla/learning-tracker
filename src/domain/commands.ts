@@ -16,7 +16,13 @@ import type {
 } from './types';
 
 export type Command =
-  | { readonly type: 'add'; readonly headline: Headline }
+  | {
+      readonly type: 'add';
+      readonly headline: Headline;
+      /** Set it to get the same item id every time the command is applied (the store replays
+       *  pending commands). A fresh id is generated when it is missing. */
+      readonly id?: ItemId;
+    }
   | { readonly type: 'editHeadline'; readonly id: ItemId; readonly headline: Headline }
   | { readonly type: 'setDescription'; readonly id: ItemId; readonly description: Description | null }
   | { readonly type: 'complete'; readonly id: ItemId }
@@ -37,6 +43,7 @@ export type Command =
   | { readonly type: 'untagItem'; readonly id: ItemId; readonly tag: TagName };
 
 export type DomainError =
+  | { readonly type: 'DuplicateItemId'; readonly id: ItemId }
   | { readonly type: 'ItemNotFound'; readonly id: ItemId }
   | { readonly type: 'CompleteRequiresDescription'; readonly id: ItemId }
   | { readonly type: 'WrongStatus'; readonly id: ItemId; readonly expected: Item['status'] }
@@ -116,7 +123,7 @@ export function applyCommand(
 ): Result<Board, DomainError> {
   switch (command.type) {
     case 'add':
-      return applyAdd(board, command.headline, now);
+      return applyAdd(board, command.headline, command.id ?? generateItemId(), now);
     case 'editHeadline':
       return applyEditHeadline(board, command.id, command.headline);
     case 'setDescription':
@@ -146,9 +153,15 @@ export function applyCommand(
   }
 }
 
-function applyAdd(board: Board, headline: Headline, now: IsoTimestamp): Result<Board, DomainError> {
+function applyAdd(
+  board: Board,
+  headline: Headline,
+  id: ItemId,
+  now: IsoTimestamp,
+): Result<Board, DomainError> {
+  if (locate(board, id)) return err({ type: 'DuplicateItemId', id });
   const item: ActiveItem = {
-    id: generateItemId(),
+    id,
     headline,
     createdAt: now,
     status: 'active',

@@ -1,6 +1,10 @@
 # Requirement 3: Tags
 
-Status: implemented.
+## Status
+
+Implemented, as planned below. One later change: when the repository or file is changed on the
+settings screen, pending work is written first, and the switch happens only if that write
+succeeds (see `doc/requirement-4-code-review.md`, C5).
 
 ## 1. What is asked
 

@@ -1,4 +1,5 @@
 import {
+  describeValidationError,
   makeHeadline,
   makeHexColor,
   makeIsoTimestamp,
@@ -7,7 +8,7 @@ import {
   makeTagName,
 } from '../domain/factories';
 import { err, ok, type Result } from '../domain/result';
-import { validateBoard } from '../domain/board';
+import { describeBoardValidationError, validateBoard } from '../domain/board';
 import type {
   ActiveItem,
   Board,
@@ -55,7 +56,11 @@ const TAG_DEF_RE = /^<!-- tag:(\S+) color:(\S+) -->$/;
 
 class Cursor {
   private index = 0;
-  constructor(private readonly lines: readonly string[]) {}
+  private readonly lines: readonly string[];
+
+  constructor(lines: readonly string[]) {
+    this.lines = lines;
+  }
 
   get lineNumber(): number {
     return this.index + 1;
@@ -143,7 +148,10 @@ export function parse(text: string): Result<ParseSuccess, ParseError> {
   const board: Board = { tags, new: acc.new, wip: acc.wip, complete: acc.complete, discarded: acc.discarded };
   const validated = validateBoard(board);
   if (!validated.ok) {
-    return err({ line: 0, reason: `Internal consistency check failed: ${JSON.stringify(validated.error)}` });
+    return err({
+      line: 0,
+      reason: `Internal consistency check failed: ${describeBoardValidationError(validated.error)}`,
+    });
   }
 
   return ok({ board, warnings });
@@ -165,11 +173,17 @@ function parseTagDefinitions(cursor: Cursor): Result<readonly Tag[], ParseError>
     const rawColor = match[2] ?? '';
     const nameResult = makeTagName(rawName);
     if (!nameResult.ok) {
-      return err({ line: lineNumber, reason: `Invalid tag name: ${JSON.stringify(nameResult.error)}` });
+      return err({
+        line: lineNumber,
+        reason: `Invalid tag name: ${describeValidationError(nameResult.error)}`,
+      });
     }
     const colorResult = makeHexColor(rawColor);
     if (!colorResult.ok) {
-      return err({ line: lineNumber, reason: `Invalid tag color: ${JSON.stringify(colorResult.error)}` });
+      return err({
+        line: lineNumber,
+        reason: `Invalid tag color: ${describeValidationError(colorResult.error)}`,
+      });
     }
 
     const name = nameResult.value;
@@ -223,7 +237,10 @@ function parseItemTags(
   for (const raw of rawTags.split(',')) {
     const nameResult = makeTagName(raw);
     if (!nameResult.ok) {
-      return err({ line, reason: `Invalid tag on item "${headline}": ${JSON.stringify(nameResult.error)}` });
+      return err({
+        line,
+        reason: `Invalid tag on item "${headline}": ${describeValidationError(nameResult.error)}`,
+      });
     }
     const name = nameResult.value;
     const lower = name.toLowerCase();
@@ -253,7 +270,7 @@ function parseItem(
   if (!headlineResult.ok) {
     return err({
       line: cursor.lineNumber - 1,
-      reason: `Invalid headline: ${JSON.stringify(headlineResult.error)}`,
+      reason: `Invalid headline: ${describeValidationError(headlineResult.error)}`,
     });
   }
 
@@ -276,13 +293,16 @@ function parseItem(
 
   const idResult = makeItemId(rawId);
   if (!idResult.ok) {
-    return err({ line: cursor.lineNumber - 1, reason: `Invalid id: ${JSON.stringify(idResult.error)}` });
+    return err({
+      line: cursor.lineNumber - 1,
+      reason: `Invalid id: ${describeValidationError(idResult.error)}`,
+    });
   }
   const createdResult = makeIsoTimestamp(rawCreated);
   if (!createdResult.ok) {
     return err({
       line: cursor.lineNumber - 1,
-      reason: `Invalid created timestamp: ${JSON.stringify(createdResult.error)}`,
+      reason: `Invalid created timestamp: ${describeValidationError(createdResult.error)}`,
     });
   }
 
@@ -292,7 +312,7 @@ function parseItem(
     if (!completedResult.ok) {
       return err({
         line: cursor.lineNumber - 1,
-        reason: `Invalid completed timestamp: ${JSON.stringify(completedResult.error)}`,
+        reason: `Invalid completed timestamp: ${describeValidationError(completedResult.error)}`,
       });
     }
     completedAt = completedResult.value;
@@ -304,7 +324,7 @@ function parseItem(
     if (!discardedResult.ok) {
       return err({
         line: cursor.lineNumber - 1,
-        reason: `Invalid discarded timestamp: ${JSON.stringify(discardedResult.error)}`,
+        reason: `Invalid discarded timestamp: ${describeValidationError(discardedResult.error)}`,
       });
     }
     discardedAt = discardedResult.value;
@@ -417,7 +437,7 @@ function parseOptionalDescription(cursor: Cursor): Result<Description | null, Pa
   if (!descResult.ok) {
     return err({
       line: cursor.lineNumber,
-      reason: `Invalid description: ${JSON.stringify(descResult.error)}`,
+      reason: `Invalid description: ${describeValidationError(descResult.error)}`,
     });
   }
   return ok(descResult.value);

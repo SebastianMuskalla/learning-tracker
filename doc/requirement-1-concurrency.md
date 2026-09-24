@@ -1,6 +1,17 @@
 # Requirement 1: Concurrency and Conflicts
 
-Status: analysis and plan. Nothing is implemented yet.
+## Status
+
+| Part                                 | Status                                                                                                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 — Stop the false conflicts   | Implemented.                                                                                                                                                                                            |
+| Phase 2 — Fewer writes, no races     | Implemented. Since requirement 4, the store keeps the pending _commands_ and applies them again on top of each new remote version (see `doc/requirement-4-code-review.md`, C1).                         |
+| Phase 3 — Merge instead of asking    | Implemented.                                                                                                                                                                                            |
+| Phase 4 — Warn before losing data    | Implemented. Since requirement 4, a hidden tab writes through the normal queue; only `pagehide` sends the `keepalive` write, and the listeners are active on every screen (requirement 4, C2 and C4).   |
+| Phase 5 — Multi-tab coordination     | Partly implemented (requirement 4, C7): tabs share the newest `sha` through a `BroadcastChannel` and refresh. There is no Web Lock, so two tabs can still write at the same time; the merge handles it. |
+| Issue C7 (refresh during a conflict) | Fixed in requirement 4 (C3).                                                                                                                                                                            |
+
+The text below is the original analysis and plan. It describes the code as it was then.
 
 ## 1. The reported problem
 

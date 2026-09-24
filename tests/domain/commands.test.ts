@@ -392,3 +392,28 @@ describe('unknown item', () => {
     }
   });
 });
+
+describe('add with a fixed id', () => {
+  it('uses the given id, so applying the command again gives the same item', () => {
+    const id = generateItemId();
+    const command = { type: 'add', headline: unwrap(makeHeadline('Same')), id } as const;
+
+    const once = unwrap(
+      applyCommand(emptyBoard(), command, unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z'))),
+    );
+    const again = unwrap(
+      applyCommand(emptyBoard(), command, unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z'))),
+    );
+
+    expect(once).toEqual(again);
+    expect(once.new[0]?.id).toBe(id);
+  });
+
+  it('rejects an id that is already on the board', () => {
+    const id = generateItemId();
+    const command = { type: 'add', headline: unwrap(makeHeadline('Twice')), id } as const;
+    const board = unwrap(applyCommand(emptyBoard(), command));
+
+    expect(applyCommand(board, command)).toEqual({ ok: false, error: { type: 'DuplicateItemId', id } });
+  });
+});
