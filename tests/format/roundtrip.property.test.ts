@@ -164,18 +164,25 @@ const arbitraryBoard: fc.Arbitrary<Board> = arbitraryTagList.chain((tagList) => 
     }));
 });
 
+// 10,000 runs take about 2 s locally, but more than 5 s on slow CI runners with coverage enabled.
+const ROUND_TRIP_TIMEOUT_MS = 60_000;
+
 describe('serialize/parse round trip', () => {
-  it('parse(serialize(board)) deep-equals board, for evil boards including headings, fences, and unicode in descriptions', () => {
-    fc.assert(
-      fc.property(arbitraryBoard, (board) => {
-        const text = serialize(board);
-        const result = parse(text);
-        expect(result.ok).toBe(true);
-        if (!result.ok) return;
-        expect(result.value.warnings).toHaveLength(0);
-        expect(boardsEqual(result.value.board, board)).toBe(true);
-      }),
-      { numRuns: 10_000 },
-    );
-  });
+  it(
+    'parse(serialize(board)) deep-equals board, for evil boards including headings, fences, and unicode in descriptions',
+    () => {
+      fc.assert(
+        fc.property(arbitraryBoard, (board) => {
+          const text = serialize(board);
+          const result = parse(text);
+          expect(result.ok).toBe(true);
+          if (!result.ok) return;
+          expect(result.value.warnings).toHaveLength(0);
+          expect(boardsEqual(result.value.board, board)).toBe(true);
+        }),
+        { numRuns: 10_000 },
+      );
+    },
+    ROUND_TRIP_TIMEOUT_MS,
+  );
 });
