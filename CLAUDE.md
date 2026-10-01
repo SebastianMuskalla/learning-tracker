@@ -28,6 +28,9 @@ Each task you get is one of two types: Planning or Implementation.
 - You may not modify the requirements without checking with the user first.
 - The task is only complete once all requirements are implemented and when all tasks on the checklist (if present) are completed.
 - When adding third-party libraries, use the latest stable release unless `README.md` pins a version (see Development).
+- Consider if the implementation has introduced a breaking change to the storage file (`learning-data.md`).
+  In that case, use the versioning mechanism and write a migration as outlined in `README.md`.
+  Document the new version there and fill out the commit hashes as far as possible.
 - `prompt.md` and `plan.md` are not tracked in the git repository.
   `README.md` needs to contain all information that is needed for the long-term health of the project.
   Before finalizing a task, check if `README.md` still matches the code and architecture and update it if needed.

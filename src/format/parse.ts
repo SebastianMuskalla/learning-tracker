@@ -22,7 +22,8 @@ import type {
   Tag,
   TagName,
 } from '../domain/types';
-import { DESC_END, DESC_START, HEADER_COMMENT, HEADER_TITLE } from './serialize';
+import { DESC_END, DESC_START, HEADER_TITLE } from './serialize';
+import { CURRENT_VERSION, versionLine } from './version';
 
 export interface ParseError {
   readonly line: number;
@@ -198,19 +199,20 @@ function parseTagDefinitions(cursor: Cursor): Result<readonly Tag[], ParseError>
 }
 
 function parseHeader(cursor: Cursor): Result<void, ParseError> {
-  if (cursor.peek() !== HEADER_TITLE) {
+  const expectedVersionLine = versionLine(CURRENT_VERSION);
+  if (cursor.peek() !== expectedVersionLine) {
     return err({
       line: cursor.lineNumber,
-      reason: `Expected "${HEADER_TITLE}", found ${describeLine(cursor.peek())}`,
+      reason: `Expected "${expectedVersionLine}", found ${describeLine(cursor.peek())}`,
     });
   }
   cursor.advance();
   cursor.skipBlankLines();
 
-  if (cursor.peek() !== HEADER_COMMENT) {
+  if (cursor.peek() !== HEADER_TITLE) {
     return err({
       line: cursor.lineNumber,
-      reason: `Expected the learning-tracker version comment, found ${describeLine(cursor.peek())}`,
+      reason: `Expected "${HEADER_TITLE}", found ${describeLine(cursor.peek())}`,
     });
   }
   cursor.advance();

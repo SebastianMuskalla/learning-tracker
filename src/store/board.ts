@@ -6,9 +6,16 @@ import { applyCommand } from '../domain/commands';
 import { generateItemId, nowTimestamp } from '../domain/factories';
 import { merge } from '../domain/merge';
 import { findItemById, type Board, type IsoTimestamp, type ItemId } from '../domain/types';
-import { combineMessages, commitMessage, INITIALIZE_MESSAGE } from '../format/commitMessage';
+import {
+  combineMessages,
+  commitMessage,
+  INITIALIZE_MESSAGE,
+  migrationMessage,
+} from '../format/commitMessage';
+import { describeUpgradeError, upgrade } from '../format/migrations/run';
 import { parse, type ParseError, type ParseWarning } from '../format/parse';
 import { serialize } from '../format/serialize';
+import { CURRENT_VERSION } from '../format/version';
 import { getFile, putFile } from '../github/client';
 import { describeClientError } from '../github/describeError';
 import type { GithubClientError, GithubRepoConfig } from '../github/types';
@@ -80,6 +87,57 @@ function roundTrips(text: string, board: Board): boolean {
   return parsed.ok && boardsEqual(parsed.value.board, board);
 }
 
+/** What a text read from GitHub turned out to be. */
+type RemoteRead =
+  | { readonly kind: 'ready'; readonly board: Board; readonly warnings: readonly ParseWarning[] }
+  | {
+      readonly kind: 'migrate';
+      readonly board: Board;
+      readonly warnings: readonly ParseWarning[];
+      /** The text of `board`, in the current format. */
+      readonly text: string;
+      readonly message: string;
+    }
+  | { readonly kind: 'failed'; readonly error: ParseError; readonly tooNew: boolean };
+
+/** The one version check for every read of the remote file: migrates an older file in memory,
+ *  rejects a newer one, and parses the result. */
+function readRemote(text: string): RemoteRead {
+  const upgraded = upgrade(text);
+  if (!upgraded.ok) {
+    return {
+      kind: 'failed',
+      error: describeUpgradeError(upgraded.error),
+      tooNew: upgraded.error.type === 'TooNew',
+    };
+  }
+  if (upgraded.value.kind === 'current') {
+    const parsed = parse(text);
+    if (!parsed.ok) return { kind: 'failed', error: parsed.error, tooNew: false };
+    return { kind: 'ready', board: parsed.value.board, warnings: parsed.value.warnings };
+  }
+
+  const { from, steps } = upgraded.value;
+  const parsed = parse(upgraded.value.text);
+  if (!parsed.ok) {
+    const reason = `Could not upgrade learning.md from format v${String(from)} to v${String(CURRENT_VERSION)}: the result is invalid (line ${String(parsed.error.line)}): ${parsed.error.reason}`;
+    return { kind: 'failed', error: { line: 0, reason }, tooNew: false };
+  }
+  const board = parsed.value.board;
+  const serialized = serialize(board);
+  if (!roundTrips(serialized, board)) {
+    const reason = `Could not upgrade learning.md from format v${String(from)} to v${String(CURRENT_VERSION)}: the result could not be safely written back.`;
+    return { kind: 'failed', error: { line: 0, reason }, tooNew: false };
+  }
+  return {
+    kind: 'migrate',
+    board,
+    warnings: parsed.value.warnings,
+    text: serialized,
+    message: migrationMessage(from, CURRENT_VERSION, steps),
+  };
+}
+
 /** Errors where the same request can succeed later without any change by the user. */
 function isTemporary(error: GithubClientError): boolean {
   switch (error.type) {
@@ -121,6 +179,8 @@ export const useBoardStore = defineStore('board', () => {
   /** A short, non-blocking message that is not an error (for example, a dropped change). */
   const notice = ref<string | null>(null);
   const parseError = ref<ParseError | null>(null);
+  /** True if `parseError` is because the file has a newer format version than this app knows. */
+  const parseErrorTooNew = ref(false);
   const warnings = ref<readonly ParseWarning[]>([]);
   const fileNotFound = ref(false);
   /** Set when GitHub rejects the token (401) or its permissions (403). The UI then opens the
@@ -268,7 +328,10 @@ export const useBoardStore = defineStore('board', () => {
 
   /** Writes pending work again after an error, for example when the browser is back online. */
   function retryNow(): Promise<void> {
-    if (syncStatus.value !== 'error' || pendingCommands.value.length === 0) return Promise.resolve();
+    if (syncStatus.value !== 'error') return Promise.resolve();
+    // Not loaded: the first load or an upgrade of the file failed. Read the file again.
+    if (!loaded.value) return canWrite.value ? load() : Promise.resolve();
+    if (pendingCommands.value.length === 0) return Promise.resolve();
     return flushNow();
   }
 
@@ -287,18 +350,81 @@ export const useBoardStore = defineStore('board', () => {
       return;
     }
 
-    const parsed = parse(result.value.text);
-    if (!parsed.ok) {
-      parseError.value = parsed.error;
+    await applyRemote(result.value, 0);
+  }
+
+  /** Shows the file that was read: as it is, or after an upgrade that is written first. */
+  async function applyRemote(
+    file: { readonly text: string; readonly sha: string },
+    attempt: number,
+  ): Promise<void> {
+    const read = readRemote(file.text);
+    if (read.kind === 'failed') {
+      parseError.value = read.error;
+      parseErrorTooNew.value = read.tooNew;
       setStatus('error');
       return;
     }
 
     parseError.value = null;
-    warnings.value = parsed.value.warnings;
-    confirm(parsed.value.board, result.value.sha, result.value.text);
-    rebaseLocal(parsed.value.board);
+    parseErrorTooNew.value = false;
+    if (read.kind === 'migrate') {
+      await writeMigration(read, file.sha, attempt);
+      return;
+    }
+    warnings.value = read.warnings;
+    confirm(read.board, file.sha, file.text);
+    rebaseLocal(read.board);
     settle();
+  }
+
+  /**
+   * Writes the upgraded file as one commit that holds nothing else. It is based on `readSha`, the
+   * sha of the text that was upgraded, so it lands at most once. After a 409/422 the file is read
+   * again and the upgrade starts over: it is never merged. Pending commands follow in their own commit.
+   */
+  async function writeMigration(
+    read: Extract<RemoteRead, { kind: 'migrate' }>,
+    readSha: string,
+    attempt: number,
+  ): Promise<void> {
+    setStatus('saving', 'Upgrading learning.md…');
+    const result = await putFile(config(), { text: read.text, sha: readSha, message: read.message });
+
+    if (result.ok) {
+      warnings.value = read.warnings;
+      retryCount = 0;
+      confirm(read.board, result.value.sha, read.text);
+      rebaseLocal(read.board);
+      settle();
+      return;
+    }
+
+    if (result.error.type === 'Conflict') {
+      if (attempt >= MAX_SYNC_ATTEMPTS - 1) {
+        setStatus('error', 'Could not upgrade learning.md. Will retry on the next load.');
+        return;
+      }
+      await sleep(backoffDelayMs(attempt));
+      const fresh = await getFile(config());
+      if (!fresh.ok) {
+        applyMigrationError(fresh.error);
+        return;
+      }
+      await applyRemote(fresh.value, attempt + 1);
+      return;
+    }
+    applyMigrationError(result.error);
+  }
+
+  /** A failed read or write during an upgrade. Nothing is lost: the next load upgrades again. */
+  function applyMigrationError(error: GithubClientError): void {
+    if (isTemporary(error)) {
+      setStatus('error', `${describeClientError(error)} Not upgraded — will retry.`);
+      scheduleRetry();
+      return;
+    }
+    applyClientError(error);
   }
 
   function initializeEmptyFile(): Promise<void> {
@@ -402,7 +528,8 @@ export const useBoardStore = defineStore('board', () => {
     retryCount += 1;
     retryTimer = setTimeout(() => {
       retryTimer = null;
-      void enqueue(() => flushPending());
+      // Before the first load (an upgrade failed), the retry reads the file again.
+      void enqueue(() => (loaded.value ? flushPending() : performLoad()));
     }, delay);
   }
 
@@ -574,15 +701,24 @@ export const useBoardStore = defineStore('board', () => {
       return;
     }
 
-    const freshParsed = parse(fresh.value.text);
-    if (!freshParsed.ok) {
-      // Writes stay blocked until the file is fixed. The work is kept for the next load.
+    const freshRead = readRemote(fresh.value.text);
+    if (freshRead.kind === 'failed') {
+      // Writes stay blocked until the file is fixed (or the app is reloaded, if the file is newer).
+      // The work is kept for the next load.
       keepUnsent();
-      parseError.value = freshParsed.error;
+      parseError.value = freshRead.error;
+      parseErrorTooNew.value = freshRead.tooNew;
       setStatus('error');
       return;
     }
-    const freshBoard = freshParsed.value.board;
+    if (freshRead.kind === 'migrate') {
+      // The file is older than this app (someone reverted it). Upgrade it first; the work is
+      // kept and written afterwards.
+      keepUnsent();
+      await writeMigration(freshRead, fresh.value.sha, 0);
+      return;
+    }
+    const freshBoard = freshRead.board;
 
     const merged = merge(baseBoard, intendedBoard, freshBoard);
     if (!merged.ok) {
@@ -679,6 +815,7 @@ export const useBoardStore = defineStore('board', () => {
     inFlightCommands.value = [];
     conflict.value = null;
     parseError.value = null;
+    parseErrorTooNew.value = false;
     warnings.value = [];
     fileNotFound.value = false;
     unauthorized.value = false;
@@ -728,6 +865,7 @@ export const useBoardStore = defineStore('board', () => {
     errorMessage,
     notice,
     parseError,
+    parseErrorTooNew,
     warnings,
     fileNotFound,
     unauthorized,

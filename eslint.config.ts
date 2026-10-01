@@ -51,6 +51,24 @@ export default defineConfigWithVueTs(
     },
   },
   {
+    // A released migration is frozen. It must not depend on code that changes with later versions.
+    files: ['src/format/migrations/*.ts'],
+    ignores: ['src/format/migrations/run.ts', 'src/format/migrations/index.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: String.raw`^\.\./(parse|serialize|version)$`,
+              message: 'A migration is frozen. It must not import code that changes with later versions.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['tests/**/*.ts'],
     ...vitest.configs.recommended,
     rules: {

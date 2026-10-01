@@ -1,6 +1,6 @@
-# Learning
+<!-- version:2 -->
 
-<!-- learning-tracker: v1 — edit by hand at your own risk; the app validates strictly -->
+# Learning
 
 <!-- tag:vue color:#aacbee -->
 <!-- tag:Vue color:#f6c9a4 -->

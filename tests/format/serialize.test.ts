@@ -9,16 +9,19 @@ import {
 } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
 import type { ActiveItem, Board } from '../../src/domain/types';
-import { HEADER_COMMENT, HEADER_TITLE, serialize } from '../../src/format/serialize';
+import { HEADER_TITLE, serialize } from '../../src/format/serialize';
+import { versionLine } from '../../src/format/version';
+
+const HEADER = `${versionLine(2)}\n\n${HEADER_TITLE}`;
 
 describe('serialize', () => {
   it('writes the header and all four section headings for an empty board', () => {
     const text = serialize(emptyBoard());
-    expect(
-      text.startsWith(
-        `${HEADER_TITLE}\n\n${HEADER_COMMENT}\n\n## New\n\n## WIP\n\n## Complete\n\n## Discarded\n`,
-      ),
-    ).toBe(true);
+    expect(text.startsWith(`${HEADER}\n\n## New\n\n## WIP\n\n## Complete\n\n## Discarded\n`)).toBe(true);
+  });
+
+  it('starts the file with the version line, then the title', () => {
+    expect(serialize(emptyBoard()).startsWith('<!-- version:2 -->\n\n# Learning\n\n')).toBe(true);
   });
 
   it('ends the file with a single trailing newline', () => {
@@ -46,12 +49,10 @@ describe('serialize', () => {
   it('a board with no tags serializes byte-for-byte as before (no new lines)', () => {
     const text = serialize(emptyBoard());
     expect(text).not.toContain('tag:');
-    expect(text).toBe(
-      `${HEADER_TITLE}\n\n${HEADER_COMMENT}\n\n## New\n\n## WIP\n\n## Complete\n\n## Discarded\n`,
-    );
+    expect(text).toBe(`${HEADER}\n\n## New\n\n## WIP\n\n## Complete\n\n## Discarded\n`);
   });
 
-  it('writes tag definition lines directly after the version comment, then one blank line, then New', () => {
+  it('writes tag definition lines directly after the header, then one blank line, then New', () => {
     const board: Board = {
       ...emptyBoard(),
       tags: [
@@ -61,7 +62,7 @@ describe('serialize', () => {
     };
     const text = serialize(board);
     expect(text).toContain(
-      `${HEADER_COMMENT}\n\n<!-- tag:vue color:#aacbee -->\n<!-- tag:rust color:#f6c9a4 -->\n\n## New`,
+      `${HEADER}\n\n<!-- tag:vue color:#aacbee -->\n<!-- tag:rust color:#f6c9a4 -->\n\n## New`,
     );
   });
 

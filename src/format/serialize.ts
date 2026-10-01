@@ -1,8 +1,7 @@
 import type { Board, Item, Section, Tag } from '../domain/types';
+import { CURRENT_VERSION, versionLine } from './version';
 
-export const FORMAT_VERSION = 'v1';
 export const HEADER_TITLE = '# Learning';
-export const HEADER_COMMENT = `<!-- learning-tracker: ${FORMAT_VERSION} — edit by hand at your own risk; the app validates strictly -->`;
 export const DESC_START = '<!-- desc -->';
 export const DESC_END = '<!-- /desc -->';
 
@@ -16,7 +15,7 @@ const SECTION_TITLES: Record<Section, string> = {
 const SECTION_ORDER: readonly Section[] = ['new', 'wip', 'complete', 'discarded'];
 
 export function serialize(board: Board): string {
-  const lines: string[] = [HEADER_TITLE, '', HEADER_COMMENT, ''];
+  const lines: string[] = [versionLine(CURRENT_VERSION), '', HEADER_TITLE, ''];
   for (const tag of board.tags) {
     lines.push(tagDefLine(tag));
   }

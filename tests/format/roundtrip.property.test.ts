@@ -22,6 +22,7 @@ import type {
   Tag,
   TagName,
 } from '../../src/domain/types';
+import { upgrade } from '../../src/format/migrations/run';
 import { parse } from '../../src/format/parse';
 import { serialize } from '../../src/format/serialize';
 import { TAG_PALETTE } from '../../src/tags/palette';
@@ -181,6 +182,19 @@ describe('serialize/parse round trip', () => {
           expect(boardsEqual(result.value.board, board)).toBe(true);
         }),
         { numRuns: 10_000 },
+      );
+    },
+    ROUND_TRIP_TIMEOUT_MS,
+  );
+
+  it(
+    'never migrates a file that the app wrote itself',
+    () => {
+      fc.assert(
+        fc.property(arbitraryBoard, (board) => {
+          expect(upgrade(serialize(board))).toEqual({ ok: true, value: { kind: 'current' } });
+        }),
+        { numRuns: 1000 },
       );
     },
     ROUND_TRIP_TIMEOUT_MS,

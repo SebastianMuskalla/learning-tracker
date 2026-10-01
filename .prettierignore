@@ -8,3 +8,5 @@ pnpm-lock.yaml
 # The parser test fixtures must keep their exact bytes. Prettier would add blank lines that the
 # parser rejects.
 tests/format/fixtures/
+# The frozen migration fixtures must keep their exact bytes, too.
+tests/format/migrations/fixtures/

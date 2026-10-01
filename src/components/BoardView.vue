@@ -175,6 +175,7 @@ function onToggleTag(id: ItemId, tag: TagName): void {
       v-if="boardStore.parseError"
       :line="boardStore.parseError.line"
       :reason="boardStore.parseError.reason"
+      :too-new="boardStore.parseErrorTooNew"
       :file-url="fileUrl"
     />
 

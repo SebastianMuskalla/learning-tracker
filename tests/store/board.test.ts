@@ -1046,3 +1046,212 @@ describe('flushBeforeUnload (C2)', () => {
     vi.useRealTimers();
   });
 });
+
+describe('upgrading learning.md', () => {
+  const OLD_COMMENT =
+    '<!-- learning-tracker: v1 — edit by hand at your own risk; the app validates strictly -->';
+  const V1_TEXT = `# Learning\n\n${OLD_COMMENT}\n\n## New\n\n## WIP\n\n## Complete\n\n## Discarded\n`;
+  const V2_TEXT = serialize(emptyBoard());
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('writes a v1 file as v2 in one commit, with the sha that was read', async () => {
+    const { board } = setup();
+    getFile.mockResolvedValue({ ok: true, value: { text: V1_TEXT, sha: 'sha-1' } });
+    putFile.mockResolvedValue({ ok: true, value: { sha: 'sha-2' } });
+
+    await board.load();
+
+    expect(putFile).toHaveBeenCalledTimes(1);
+    expect(putFile).toHaveBeenCalledWith(expect.anything(), {
+      text: V2_TEXT,
+      sha: 'sha-1',
+      message:
+        'Upgrade learning.md from format v1 to v2\n\nv1 → v2: replace the learning-tracker comment with a version line',
+    });
+    expect(board.sha).toBe('sha-2');
+    expect(board.baseText).toBe(V2_TEXT);
+    expect(board.syncStatus).toBe('saved');
+    expect(board.parseError).toBeNull();
+  });
+
+  it('upgrades an empty file through both steps', async () => {
+    const { board } = setup();
+    getFile.mockResolvedValue({ ok: true, value: { text: '', sha: 'sha-1' } });
+    putFile.mockResolvedValue({ ok: true, value: { sha: 'sha-2' } });
+
+    await board.load();
+
+    expect(putFile).toHaveBeenCalledTimes(1);
+    const input = putFile.mock.calls[0]?.[1];
+    expect(input?.text).toBe(V2_TEXT);
+    expect(input?.message).toMatch(/^Upgrade learning\.md from format v0 to v2\n\nv0 → v1: .+\nv1 → v2: .+$/);
+    expect(board.sha).toBe('sha-2');
+  });
+
+  it('does not write a file that is at the current version', async () => {
+    const { board } = setup();
+    getFile.mockResolvedValue({ ok: true, value: { text: V2_TEXT, sha: 'sha-1' } });
+
+    await board.load();
+
+    expect(putFile).not.toHaveBeenCalled();
+  });
+
+  it('blocks writes for a file that is newer than the app', async () => {
+    const { board } = setup();
+    getFile.mockResolvedValue({
+      ok: true,
+      value: { text: V2_TEXT.replace('version:2', 'version:3'), sha: 'sha-1' },
+    });
+
+    await board.load();
+
+    expect(board.parseError?.reason).toContain('uses format version 3');
+    expect(board.parseErrorTooNew).toBe(true);
+    expect(board.canWrite).toBe(false);
+    expect(board.syncStatus).toBe('error');
+    expect(putFile).not.toHaveBeenCalled();
+  });
+
+  it('blocks writes and writes nothing when a migration fails', async () => {
+    const { board } = setup();
+    const broken = V1_TEXT.replace('app validates', 'app checks');
+    getFile.mockResolvedValue({ ok: true, value: { text: broken, sha: 'sha-1' } });
+
+    await board.load();
+
+    expect(board.parseError).toEqual({
+      line: 3,
+      reason: expect.stringContaining('from format v1 to v2') as string,
+    });
+    expect(board.parseErrorTooNew).toBe(false);
+    expect(putFile).not.toHaveBeenCalled();
+  });
+
+  it('after a 409, reads again and does not write when the file is already upgraded', async () => {
+    const { board } = setup();
+    vi.useFakeTimers();
+    getFile
+      .mockResolvedValueOnce({ ok: true, value: { text: V1_TEXT, sha: 'sha-1' } })
+      .mockResolvedValueOnce({ ok: true, value: { text: V2_TEXT, sha: 'sha-2' } });
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+
+    const loading = board.load();
+    await vi.runAllTimersAsync();
+    await loading;
+
+    expect(putFile).toHaveBeenCalledTimes(1);
+    expect(board.sha).toBe('sha-2');
+    expect(board.syncStatus).toBe('saved');
+  });
+
+  it('after a 409 with a stale read, starts over with the same sha, up to the attempt limit', async () => {
+    const { board } = setup();
+    vi.useFakeTimers();
+    getFile.mockResolvedValue({ ok: true, value: { text: V1_TEXT, sha: 'sha-1' } });
+    putFile.mockResolvedValue({ ok: false, error: { type: 'Conflict' } });
+
+    const loading = board.load();
+    await vi.runAllTimersAsync();
+    await loading;
+
+    expect(putFile).toHaveBeenCalledTimes(4);
+    for (const call of putFile.mock.calls) expect(call[1].sha).toBe('sha-1');
+    expect(board.syncStatus).toBe('error');
+    expect(board.errorMessage).toContain('Could not upgrade');
+    expect(board.sha).toBeNull();
+  });
+
+  it('writes pending commands in a second commit after the upgrade', async () => {
+    const { board } = setup();
+    vi.useFakeTimers();
+    board.applyAndSync({ type: 'add', headline: unwrap(makeHeadline('Mine')) });
+    getFile.mockResolvedValue({ ok: true, value: { text: V1_TEXT, sha: 'sha-1' } });
+    putFile
+      .mockResolvedValueOnce({ ok: true, value: { sha: 'sha-2' } })
+      .mockResolvedValueOnce({ ok: true, value: { sha: 'sha-3' } });
+
+    await board.load();
+    expect(putFile).toHaveBeenCalledTimes(1);
+    expect(putFile.mock.calls[0]?.[1].text).toBe(V2_TEXT);
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(putFile).toHaveBeenCalledTimes(2);
+    expect(putFile.mock.calls[1]?.[1]).toMatchObject({ sha: 'sha-2', message: 'Add "Mine"' });
+    expect(board.sha).toBe('sha-3');
+  });
+
+  it('403 while upgrading opens the setup screen', async () => {
+    const { board } = setup();
+    getFile.mockResolvedValue({ ok: true, value: { text: V1_TEXT, sha: 'sha-1' } });
+    putFile.mockResolvedValue({ ok: false, error: { type: 'Forbidden', message: 'no' } });
+
+    await board.load();
+
+    expect(board.unauthorized).toBe(true);
+    expect(board.syncStatus).toBe('error');
+  });
+
+  it('a network error while upgrading retries by loading again', async () => {
+    const { board } = setup();
+    vi.useFakeTimers();
+    getFile.mockResolvedValue({ ok: true, value: { text: V1_TEXT, sha: 'sha-1' } });
+    putFile
+      .mockResolvedValueOnce({ ok: false, error: { type: 'Network', message: 'offline' } })
+      .mockResolvedValueOnce({ ok: true, value: { sha: 'sha-2' } });
+
+    await board.load();
+    expect(board.syncStatus).toBe('error');
+    expect(board.errorMessage).toContain('will retry');
+
+    await vi.advanceTimersByTimeAsync(2500);
+
+    expect(getFile).toHaveBeenCalledTimes(2);
+    expect(putFile).toHaveBeenCalledTimes(2);
+    expect(board.sha).toBe('sha-2');
+    expect(board.syncStatus).toBe('saved');
+  });
+
+  it('a conflict that reads a newer file blocks writes and keeps the work', async () => {
+    const { board } = setup();
+    vi.useFakeTimers();
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: V2_TEXT, sha: 'sha-1' } });
+    await board.load();
+
+    board.applyAndSync({ type: 'add', headline: unwrap(makeHeadline('Mine')) });
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce({
+      ok: true,
+      value: { text: V2_TEXT.replace('version:2', 'version:3'), sha: 'sha-9' },
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(board.parseErrorTooNew).toBe(true);
+    expect(board.hasUnsavedWork).toBe(true);
+    expect(putFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('a conflict that reads an older file upgrades it, then writes the work', async () => {
+    const { board } = setup();
+    vi.useFakeTimers();
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: V2_TEXT, sha: 'sha-1' } });
+    await board.load();
+
+    board.applyAndSync({ type: 'add', headline: unwrap(makeHeadline('Mine')) });
+    putFile
+      .mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } })
+      .mockResolvedValueOnce({ ok: true, value: { sha: 'sha-3' } })
+      .mockResolvedValueOnce({ ok: true, value: { sha: 'sha-4' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: V1_TEXT, sha: 'sha-2' } });
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(putFile).toHaveBeenCalledTimes(3);
+    expect(putFile.mock.calls[1]?.[1]).toMatchObject({ sha: 'sha-2', text: V2_TEXT });
+    expect(putFile.mock.calls[2]?.[1]).toMatchObject({ sha: 'sha-3', message: 'Add "Mine"' });
+    expect(board.sha).toBe('sha-4');
+  });
+});

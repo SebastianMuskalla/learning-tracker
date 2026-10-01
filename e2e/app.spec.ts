@@ -116,3 +116,49 @@ test('the same item changed on both sides shows the conflict dialog', async ({ p
   await expect(page.locator('.columns').getByText('Theirs')).toBeVisible();
   expect(headlinesOnGithub(github)).toEqual(['Theirs']);
 });
+
+test('an empty file is upgraded to the current format', async ({ page }) => {
+  const github = new FakeGithub('');
+  await github.install(page);
+  await configure(page);
+  await page.goto('./');
+
+  await waitUntilSaved(page);
+
+  expect(github.putMessages).toHaveLength(1);
+  expect(github.putMessages[0]).toMatch(/^Upgrade learning\.md from format v0 to v2/);
+  expect(github.text).toBe(serialize(emptyBoard()));
+});
+
+test('a version-1 file is upgraded and keeps its items', async ({ page }) => {
+  const v1 = [
+    '# Learning',
+    '',
+    '<!-- learning-tracker: v1 — edit by hand at your own risk; the app validates strictly -->',
+    '',
+    '## New',
+    '',
+    '### Old topic',
+    '<!-- id:01M2KCX2QA8VMTXY950V44DB2J created:2026-09-15 -->',
+    '',
+    '## WIP',
+    '',
+    '## Complete',
+    '',
+    '## Discarded',
+    '',
+  ].join('\n');
+  const github = new FakeGithub(v1);
+  await github.install(page);
+  await configure(page);
+  await page.goto('./');
+
+  await expect(page.getByText('Old topic')).toBeVisible();
+  await waitUntilSaved(page);
+
+  expect(github.putMessages).toEqual([
+    'Upgrade learning.md from format v1 to v2\n\nv1 → v2: replace the learning-tracker comment with a version line',
+  ]);
+  expect(github.text?.startsWith('<!-- version:2 -->\n\n# Learning\n\n')).toBe(true);
+  expect(headlinesOnGithub(github)).toEqual(['Old topic']);
+});

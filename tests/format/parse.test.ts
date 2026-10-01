@@ -10,6 +10,22 @@ function fixture(name: string): string {
   return readFileSync(`${fixturesDir}${name}`, 'utf-8');
 }
 
+describe('parse — version line', () => {
+  it('rejects a file with the version-1 header (the store migrates it first)', () => {
+    const text = readFileSync(`${fixturesDir}../migrations/fixtures/v1/valid.md`, 'utf-8');
+    const result = parse(text);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.line).toBe(1);
+    expect(result.error.reason).toContain('Expected "<!-- version:2 -->"');
+  });
+
+  it('accepts several blank lines between the version line and the title', () => {
+    const text = fixture('empty.md').replace('<!-- version:2 -->\n\n', '<!-- version:2 -->\n\n\n\n');
+    expect(parse(text).ok).toBe(true);
+  });
+});
+
 describe('parse — valid files', () => {
   it('parses a file with items in every section', () => {
     const result = parse(fixture('valid.md'));
@@ -107,7 +123,7 @@ describe('parse — invalid files', () => {
     ['complete-without-completed-tag.md', 16, 'Item under Complete is missing the required metadata'],
     ['malformed-meta.md', 8, 'Malformed metadata comment'],
     ['both-completed-and-discarded.md', 12, 'An item cannot have both completed: and discarded: metadata'],
-    ['bad-header.md', 1, 'Expected "# Learning", found "# My Learning Log"'],
+    ['bad-header.md', 3, 'Expected "# Learning", found "# My Learning Log"'],
     ['unknown-tag-on-item.md', 10, 'Unknown tag "rust" on item "Some item"'],
     ['duplicate-tag-definition.md', 6, 'Duplicate tag "Vue"'],
     ['invalid-tag-color.md', 5, 'Invalid tag color: "#zzzzzz" is not a valid color (expected #rrggbb)'],

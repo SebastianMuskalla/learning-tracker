@@ -331,7 +331,7 @@ this table.
 | Folder                                      | What it holds                                                                                                                                 |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/domain/`                               | The data model (`types.ts`), validated factories for the branded types, the commands (`applyCommand`), and the 3-way `merge`. No I/O.         |
-| `src/format/`                               | `parse` and `serialize` for `learning.md`, and the commit messages.                                                                           |
+| `src/format/`                               | `parse` and `serialize` for `learning.md`, the commit messages, and `version.ts` (the format version). `migrations/` upgrades old files.      |
 | `src/github/`                               | The GitHub Contents API client. It returns a `Result`, never throws for an HTTP error, and checks the shape of every response.                |
 | `src/store/`                                | Pinia stores. `board.ts` holds the board and runs every read and write; `settings.ts`, `theme.ts`, `tagFilter.ts`, and `search.ts` are small. |
 | `src/composables/`                          | `useSyncLifecycle`: connects the board store to page events (tab hidden, page closing, back online, other tabs).                              |
@@ -396,7 +396,7 @@ data: a typo should cause a clear error, not silent data loss.
 
 ```
 file        := header tagdef* blank* section('New') section('WIP') section('Complete') section('Discarded')
-header      := '# Learning' NL blank* '<!-- learning-tracker: v1 — …' NL blank*
+header      := '<!-- version:' VERSION ' -->' NL blank* '# Learning' NL blank*
 tagdef      := '<!-- tag:' NAME ' color:#' HEX6 ' -->' NL blank*
 section(S)  := '## ' S NL blank* item*
 item        := '### ' headline NL
@@ -412,8 +412,8 @@ blank       := an empty line (outside desc blocks)
 
 Rules for hand edits:
 
-- Keep the header line and the `learning-tracker: v1` comment exactly as
-  the app wrote them.
+- Keep the `<!-- version:N -->` line and the `# Learning` line exactly as
+  the app wrote them. Never change the version number.
 - Keep all four sections, in this order: New, WIP, Complete, Discarded.
   Keep every section even when it is empty.
 - Inside a `<!-- desc -->` … `<!-- /desc -->` block, write anything you
@@ -445,6 +445,61 @@ Rules for hand edits:
 - A file with no `tagdef` lines and no `tags:` parts is still a valid file:
   this is exactly what every file looked like before tags existed, and
   every such topic is read as having no tags.
+
+### Format versions
+
+The first line of the file is `<!-- version:N -->`. `N` is the format
+version. The app knows one version (`CURRENT_VERSION` in
+`src/format/version.ts`).
+
+- If the file is older, the app upgrades it. It applies the migrations one
+  after the other, on the text, and writes the result as **one** commit named
+  "Upgrade learning.md from format vA to vB". This is also true when the
+  app skips several versions. Changes that were not saved yet follow in a
+  separate commit. While this runs, the corner shows "Upgrading learning.md…".
+- If the file is newer than the app, the app blocks all writes and shows a
+  **Reload** button. Reload the page to get the newest version of the app.
+- If an upgrade fails (for example, because of a hand edit), the app shows the
+  error and writes nothing.
+
+Each upgrade is safe with many devices at the same time: a write is based
+on the version of the file that the app read, and GitHub rejects it if the
+file changed. Then the app reads the file again.
+
+| Version | Change                                                                                    | First commit on `main` | Last commit on `main` |
+| ------- | ----------------------------------------------------------------------------------------- | ---------------------- | --------------------- |
+| 0       | No version line. Only the empty file. Migrated to 1.                                      | –                      | –                     |
+| 1       | First format. The comment `<!-- learning-tracker: v1 — … -->` below the title marks it.   | `5e6ee92`              | (fill after merge)    |
+| 2       | The line `<!-- version:2 -->` above the title replaces the comment. Nothing else changes. | (fill after merge)     | current               |
+
+"First commit" is the first commit whose app writes this version. Fill in
+the hashes of a new version in a small commit after the merge. This command
+finds the first commit:
+
+```sh
+git log --reverse --format=%h -S "CURRENT_VERSION = 2" -- src/format/version.ts | head -1
+```
+
+The last commit of the previous version is the parent of that commit. Inside
+one version, later commits can add optional syntax (for example tags). An
+older app rejects a file that uses it and blocks writes.
+
+To add a format version:
+
+1. Add the migration in `src/format/migrations/` and register it in
+   `index.ts`. A migration is a pure function from text to text. It must be
+   self-contained: it must not import the parser, the serializer, or
+   `version.ts` (ESLint checks this), because a released migration never
+   changes.
+2. Increase `CURRENT_VERSION`.
+3. Copy the current valid fixtures to
+   `tests/format/migrations/fixtures/v<old>/`, and add the expected output
+   of the migration as `<name>.expected.md`. These fixtures are frozen.
+4. Change `parse`, `serialize`, and the format description.
+5. Add the row to the version table.
+
+Bump the version only when the new app cannot read a file that the previous
+app wrote. New optional syntax does not need a bump.
 
 Before every save, the app reads back what it is about to write and
 compares it with its own in-memory data. If the two do not match exactly,
@@ -542,7 +597,6 @@ tells the other tabs, and they read the new version.
 
 ## Future Work
 
-- Data file versioning concept
 - Favicon when used as App
 - Forbid H1 & H2
 - Tags as list

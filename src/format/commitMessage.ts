@@ -1,5 +1,6 @@
 import type { Command } from '../domain/commands';
 import type { Item, Section } from '../domain/types';
+import type { MigrationStep } from './migrations/run';
 
 const SECTION_LABELS: Record<Section, string> = {
   new: 'New',
@@ -54,4 +55,11 @@ export function combineMessages(messages: readonly string[]): string {
   const [first] = messages;
   if (first === undefined || messages.length === 1) return first ?? '';
   return `Update learning.md (${String(messages.length)} changes)\n\n${messages.map((m) => `- ${m}`).join('\n')}`;
+}
+
+/** One commit for the whole migration chain, with one body line per step. */
+export function migrationMessage(from: number, to: number, steps: readonly MigrationStep[]): string {
+  const subject = `Upgrade learning.md from format v${String(from)} to v${String(to)}`;
+  const body = steps.map((s) => `v${String(s.from)} → v${String(s.from + 1)}: ${s.description}`);
+  return `${subject}\n\n${body.join('\n')}`;
 }

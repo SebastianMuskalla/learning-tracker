@@ -1,6 +1,6 @@
-# My Learning Log
+<!-- version:2 -->
 
-<!-- learning-tracker: v1 — edit by hand at your own risk; the app validates strictly -->
+# My Learning Log
 
 ## New
 
