@@ -35,7 +35,7 @@ export function serialize(board: Board): string {
 }
 
 function serializeItem(item: Item): readonly string[] {
-  const lines: string[] = [`### ${item.headline}`, metaLine(item)];
+  const lines: string[] = [`### ${item.headline}`, metaLine(item), ...item.tags.map((tag) => `- ${tag}`)];
   if (item.description !== null) {
     const fence = '`'.repeat(fenceLength(item.description));
     lines.push(`${fence}${FENCE_LANGUAGE}`, ...item.description.split('\n'), fence);
@@ -64,9 +64,6 @@ function metaLine(item: Item): string {
   }
   if (item.status === 'discarded') {
     parts.push(`discarded:${item.discardedAt}`);
-  }
-  if (item.tags.length > 0) {
-    parts.push(`tags:${item.tags.join(',')}`);
   }
   return `<!-- ${parts.join(' ')} -->`;
 }

@@ -13,7 +13,7 @@ function color(hex: string): HexColor {
 
 /**
  * 16 pastel colors offered when creating a tag, hue-ordered, checked against `--tag-ink`
- * (`#1d1b18`) for a contrast ratio of at least 4.5:1. The file format accepts any `#rrggbb`, so a
+ * (`#1d1b18`) for a contrast ratio of at least 4.5:1. The file format accepts any lower-case `#rrggbb`, so a
  * hand edit can use a color outside this list; the app keeps it as-is.
  */
 export const TAG_PALETTE: readonly PaletteColor[] = [

@@ -30,16 +30,6 @@ export interface ParseError {
   readonly reason: string;
 }
 
-export interface ParseWarning {
-  readonly line: number;
-  readonly reason: string;
-}
-
-export interface ParseSuccess {
-  readonly board: Board;
-  readonly warnings: readonly ParseWarning[];
-}
-
 const SECTION_SEQUENCE: readonly { readonly section: Section; readonly heading: string }[] = [
   { section: 'new', heading: '## New' },
   { section: 'wip', heading: '## WIP' },
@@ -47,13 +37,23 @@ const SECTION_SEQUENCE: readonly { readonly section: Section; readonly heading: 
   { section: 'discarded', heading: '## Discarded' },
 ];
 
-// A timestamp value is either the current full format (`2026-09-16T14:32:07Z`) or the legacy
-// date-only format (`2026-09-16`) written before this app tracked time; see makeIsoTimestamp.
-const TS = String.raw`\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?`;
-const META_RE = new RegExp(
-  `^<!-- id:([0-9A-Za-z]{26}) created:(${TS})(?: completed:(${TS}))?(?: discarded:(${TS}))?(?: tags:(\\S+))? -->$`,
-);
+const TS = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
+const ID = '([0-9A-Za-z]{26})';
+// Each section has exactly one valid metadata form.
+const META_RE: Record<Section, RegExp> = {
+  new: new RegExp(`^<!-- id:${ID} created:(${TS}) -->$`),
+  wip: new RegExp(`^<!-- id:${ID} created:(${TS}) -->$`),
+  complete: new RegExp(`^<!-- id:${ID} created:(${TS}) completed:(${TS}) -->$`),
+  discarded: new RegExp(`^<!-- id:${ID} created:(${TS}) discarded:(${TS}) -->$`),
+};
+const SECTION_TITLE: Record<Section, string> = {
+  new: 'New',
+  wip: 'WIP',
+  complete: 'Complete',
+  discarded: 'Discarded',
+};
 const TAG_DEF_RE = /^<!-- tag:(\S+) color:(\S+) -->$/;
+const TAG_LINE_RE = /^- (\S+)$/;
 
 class Cursor {
   private index = 0;
@@ -95,7 +95,7 @@ interface Accumulator {
   readonly discarded: DiscardedItem[];
 }
 
-export function parse(text: string): Result<ParseSuccess, ParseError> {
+export function parse(text: string): Result<Board, ParseError> {
   const normalised = text.replace(/\r\n/g, '\n');
   const lines = normalised.split('\n');
   const cursor = new Cursor(lines);
@@ -107,7 +107,6 @@ export function parse(text: string): Result<ParseSuccess, ParseError> {
   if (!tagsResult.ok) return tagsResult;
   const tags = tagsResult.value;
 
-  const warnings: ParseWarning[] = [];
   const seenIds = new Set<string>();
   const acc: Accumulator = { new: [], wip: [], complete: [], discarded: [] };
 
@@ -125,14 +124,13 @@ export function parse(text: string): Result<ParseSuccess, ParseError> {
     while (cursor.peek()?.startsWith('### ') === true) {
       const itemResult = parseItem(cursor, section, tags);
       if (!itemResult.ok) return itemResult;
-      const { item, warning } = itemResult.value;
+      const item = itemResult.value;
 
       if (seenIds.has(item.id)) {
         return err({ line: cursor.lineNumber, reason: `Duplicate id "${item.id}"` });
       }
       seenIds.add(item.id);
 
-      if (warning) warnings.push(warning);
       placeItem(acc, item);
       cursor.skipBlankLines();
     }
@@ -155,7 +153,7 @@ export function parse(text: string): Result<ParseSuccess, ParseError> {
     });
   }
 
-  return ok({ board, warnings });
+  return ok(board);
 }
 
 function parseTagDefinitions(cursor: Cursor): Result<readonly Tag[], ParseError> {
@@ -220,38 +218,28 @@ function parseHeader(cursor: Cursor): Result<void, ParseError> {
   return ok(undefined);
 }
 
-interface ParsedItem {
-  readonly item: Item;
-  readonly warning: ParseWarning | undefined;
-}
-
-function parseItemTags(
-  rawTags: string | undefined,
-  definedTags: readonly Tag[],
-  headline: string,
-  line: number,
-): Result<readonly TagName[], ParseError> {
-  if (rawTags === undefined) return ok([]);
-
-  const definedLower = new Set(definedTags.map((tag) => tag.name.toLowerCase()));
-  const seenLower = new Set<string>();
+/** Reads the `- NAME` lines below the metadata line. A name must be defined, exactly as written. */
+function parseTagLines(cursor: Cursor, definedTags: readonly Tag[]): Result<readonly TagName[], ParseError> {
+  const defined = new Set<string>(definedTags.map((tag) => tag.name));
+  const seen = new Set<string>();
   const tags: TagName[] = [];
-  for (const raw of rawTags.split(',')) {
-    const nameResult = makeTagName(raw);
+  for (;;) {
+    const match = TAG_LINE_RE.exec(cursor.peek() ?? '');
+    if (!match) break;
+    const line = cursor.lineNumber;
+    cursor.advance();
+
+    const nameResult = makeTagName(match[1] ?? '');
     if (!nameResult.ok) {
-      return err({
-        line,
-        reason: `Invalid tag on item "${headline}": ${describeValidationError(nameResult.error)}`,
-      });
+      return err({ line, reason: `Invalid tag: ${describeValidationError(nameResult.error)}` });
     }
     const name = nameResult.value;
-    const lower = name.toLowerCase();
-    if (seenLower.has(lower)) {
-      return err({ line, reason: `Duplicate tag "${name}" on item "${headline}"` });
+    if (seen.has(name)) {
+      return err({ line, reason: `Duplicate tag "${name}" on this item` });
     }
-    seenLower.add(lower);
-    if (!definedLower.has(lower)) {
-      return err({ line, reason: `Unknown tag "${name}" on item "${headline}"` });
+    seen.add(name);
+    if (!defined.has(name)) {
+      return err({ line, reason: `Unknown tag "${name}" on this item` });
     }
     tags.push(name);
   }
@@ -262,7 +250,7 @@ function parseItem(
   cursor: Cursor,
   fileSection: Section,
   definedTags: readonly Tag[],
-): Result<ParsedItem, ParseError> {
+): Result<Item, ParseError> {
   const headlineLine = cursor.advance();
   if (headlineLine === undefined) {
     return err({ line: cursor.lineNumber, reason: 'Unexpected end of file while reading an item headline' });
@@ -280,67 +268,41 @@ function parseItem(
   if (metaLine === undefined) {
     return err({ line: cursor.lineNumber, reason: 'Unexpected end of file while reading item metadata' });
   }
-  const match = META_RE.exec(metaLine);
+  const metaLineNumber = cursor.lineNumber - 1;
+  const match = META_RE[fileSection].exec(metaLine);
   if (!match) {
     return err({
-      line: cursor.lineNumber - 1,
-      reason: `Malformed metadata comment: ${describeLine(metaLine)}`,
+      line: metaLineNumber,
+      reason: `Malformed metadata for an item under ${SECTION_TITLE[fileSection]}: ${describeLine(metaLine)}`,
     });
   }
-  const rawId = match[1] ?? '';
-  const rawCreated = match[2] ?? '';
-  const rawCompleted = match[3];
-  const rawDiscarded = match[4];
-  const rawTags = match[5];
 
-  const idResult = makeItemId(rawId);
+  const idResult = makeItemId(match[1] ?? '');
   if (!idResult.ok) {
-    return err({
-      line: cursor.lineNumber - 1,
-      reason: `Invalid id: ${describeValidationError(idResult.error)}`,
-    });
+    return err({ line: metaLineNumber, reason: `Invalid id: ${describeValidationError(idResult.error)}` });
   }
-  const createdResult = makeIsoTimestamp(rawCreated);
+  const createdResult = makeIsoTimestamp(match[2] ?? '');
   if (!createdResult.ok) {
     return err({
-      line: cursor.lineNumber - 1,
+      line: metaLineNumber,
       reason: `Invalid created timestamp: ${describeValidationError(createdResult.error)}`,
     });
   }
-
-  let completedAt: IsoTimestamp | undefined;
-  if (rawCompleted !== undefined) {
-    const completedResult = makeIsoTimestamp(rawCompleted);
-    if (!completedResult.ok) {
+  // Only the Complete and Discarded forms have a third timestamp.
+  let endedAt: IsoTimestamp | undefined;
+  if (match[3] !== undefined) {
+    const endedResult = makeIsoTimestamp(match[3]);
+    if (!endedResult.ok) {
+      const key = fileSection === 'complete' ? 'completed' : 'discarded';
       return err({
-        line: cursor.lineNumber - 1,
-        reason: `Invalid completed timestamp: ${describeValidationError(completedResult.error)}`,
+        line: metaLineNumber,
+        reason: `Invalid ${key} timestamp: ${describeValidationError(endedResult.error)}`,
       });
     }
-    completedAt = completedResult.value;
+    endedAt = endedResult.value;
   }
 
-  let discardedAt: IsoTimestamp | undefined;
-  if (rawDiscarded !== undefined) {
-    const discardedResult = makeIsoTimestamp(rawDiscarded);
-    if (!discardedResult.ok) {
-      return err({
-        line: cursor.lineNumber - 1,
-        reason: `Invalid discarded timestamp: ${describeValidationError(discardedResult.error)}`,
-      });
-    }
-    discardedAt = discardedResult.value;
-  }
-
-  if (completedAt !== undefined && discardedAt !== undefined) {
-    return err({
-      line: cursor.lineNumber - 1,
-      reason: 'An item cannot have both completed: and discarded: metadata',
-    });
-  }
-
-  const headline = headlineResult.value;
-  const tagsResult = parseItemTags(rawTags, definedTags, headline, cursor.lineNumber - 1);
+  const tagsResult = parseTagLines(cursor, definedTags);
   if (!tagsResult.ok) return tagsResult;
   const tags = tagsResult.value;
 
@@ -350,68 +312,59 @@ function parseItem(
 
   const id: ItemId = idResult.value;
   const createdAt: IsoTimestamp = createdResult.value;
+  const headline = headlineResult.value;
 
-  if (discardedAt !== undefined) {
-    if (fileSection !== 'discarded') {
-      return err({
-        line: cursor.lineNumber,
-        reason: 'Item with discarded: metadata found outside the Discarded section',
-      });
+  // The metadata form of Complete and Discarded always has the third timestamp.
+  const missingEnd = err({
+    line: metaLineNumber,
+    reason: `Malformed metadata for an item under ${SECTION_TITLE[fileSection]}: ${describeLine(metaLine)}`,
+  });
+
+  switch (fileSection) {
+    case 'discarded': {
+      if (endedAt === undefined) return missingEnd;
+      const item: DiscardedItem = {
+        id,
+        headline,
+        createdAt,
+        status: 'discarded',
+        description,
+        discardedAt: endedAt,
+        tags,
+      };
+      return ok(item);
     }
-    const item: DiscardedItem = {
-      id,
-      headline,
-      createdAt,
-      status: 'discarded',
-      description,
-      discardedAt,
-      tags,
-    };
-    return ok({ item, warning: undefined });
-  }
-
-  if (completedAt !== undefined) {
-    if (fileSection !== 'complete') {
-      return err({
-        line: cursor.lineNumber,
-        reason: 'Item with completed: metadata found outside the Complete section',
-      });
+    case 'complete': {
+      if (endedAt === undefined) return missingEnd;
+      if (description === null) {
+        return err({ line: metaLineNumber, reason: 'A Complete item must have a description' });
+      }
+      const item: CompleteItem = {
+        id,
+        headline,
+        createdAt,
+        status: 'complete',
+        description,
+        completedAt: endedAt,
+        tags,
+      };
+      return ok(item);
     }
-    if (description === null) {
-      return err({ line: cursor.lineNumber, reason: 'A Complete item must have a description' });
+    case 'new':
+    case 'wip': {
+      if (fileSection === 'new' && description !== null) {
+        return err({ line: metaLineNumber, reason: 'An item with a description must be under WIP, not New' });
+      }
+      if (fileSection === 'wip' && description === null) {
+        return err({
+          line: metaLineNumber,
+          reason: 'An item without a description must be under New, not WIP',
+        });
+      }
+      const item: ActiveItem = { id, headline, createdAt, status: 'active', description, tags };
+      return ok(item);
     }
-    const item: CompleteItem = {
-      id,
-      headline,
-      createdAt,
-      status: 'complete',
-      description,
-      completedAt,
-      tags,
-    };
-    return ok({ item, warning: undefined });
   }
-
-  if (fileSection === 'complete' || fileSection === 'discarded') {
-    return err({
-      line: cursor.lineNumber,
-      reason: `Item under ${fileSection === 'complete' ? 'Complete' : 'Discarded'} is missing the required metadata`,
-    });
-  }
-
-  const item: ActiveItem = { id, headline, createdAt, status: 'active', description, tags };
-  const expectedSection: Section = description === null ? 'new' : 'wip';
-  const warning: ParseWarning | undefined =
-    expectedSection === fileSection
-      ? undefined
-      : {
-          line: cursor.lineNumber,
-          reason: `"${item.headline}" is under ${fileSection === 'new' ? 'New' : 'WIP'} but its description implies ${
-            expectedSection === 'new' ? 'New' : 'WIP'
-          }; it will be normalised on the next write`,
-        };
-
-  return ok({ item, warning });
 }
 
 const OPENING_FENCE_RE = new RegExp(`^(\`{3,})${FENCE_LANGUAGE}$`);
@@ -460,9 +413,12 @@ function parseOptionalDescription(cursor: Cursor): Result<Description | null, Pa
   const descResult = makeOptionalDescription(rawLines.join('\n'));
   if (!descResult.ok) {
     return err({
-      line: cursor.lineNumber,
+      line: openingLine,
       reason: `Invalid description: ${describeValidationError(descResult.error)}`,
     });
+  }
+  if (descResult.value === null) {
+    return err({ line: openingLine, reason: 'Empty description: remove the fence or write text in it' });
   }
   return ok(descResult.value);
 }

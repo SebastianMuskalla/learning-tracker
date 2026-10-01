@@ -398,40 +398,100 @@ To add a new command:
 
 ## The `learning.md` file format
 
-You can open and edit `learning.md` by hand on github.com. But the app's
-parser is strict. If a line does not match the expected format, the app
-shows a parse error. It will not guess what you meant. This protects your
-data: a typo should cause a clear error, not silent data loss.
+### Goals of the file format
+
+- **Goal:** `learning.md` is easy for humans to read. This applies to the
+  raw text and to the rendered view (for example the preview on github.com).
+- **Non-goal:** humans can edit `learning.md` by hand without errors. The
+  syntax is strict. If a hand edit breaks a rule, the app shows a parse
+  error with a line number and writes nothing. It does not try to guess
+  what you meant. We prefer simple code to a parser that accepts many
+  variants.
+- **Rule for the future:** when there is a choice, the format has one way
+  to write a value. A new syntax variant needs a good reason.
+
+You can still open and edit `learning.md` by hand on github.com. Your last
+good version is always in the git history, so a mistake does not lose data.
+
+### Grammar
 
 ```
 file        := header tagdef* blank* section('New') section('WIP') section('Complete') section('Discarded')
-header      := '<!-- version:' VERSION ' -->' NL blank* '# Learning' NL blank*
-tagdef      := '<!-- tag:' NAME ' color:#' HEX6 ' -->' NL blank*
-section(S)  := '## ' S NL blank* item*
-item        := '### ' headline NL
-               '<!-- ' meta (' ' meta)* ' -->' NL
-               fence?
+header      := '<!-- version:4 -->' NL blank* '# Learning' NL blank*
+tagdef      := '<!-- tag:' NAME ' color:#' HEX6LOWER ' -->' NL blank*
+section(S)  := '## ' S NL blank* item(S)*
+item(S)     := '### ' headline NL
+               meta(S) NL
+               tagline*
+               fence(S)
                blank*
-meta        := 'id:' ULID | 'created:' TIMESTAMP | 'completed:' TIMESTAMP | 'discarded:' TIMESTAMP
-             | 'tags:' NAME (',' NAME)*
-fence       := '`'{N} 'markdown' NL rawline* '`'{N} NL        (N is 3 or more)
+fence(New)       := nothing
+fence(WIP)       := fence
+fence(Complete)  := fence
+fence(Discarded) := fence?
+meta(New)       := '<!-- id:' ULID ' created:' TIMESTAMP ' -->'
+meta(WIP)       := '<!-- id:' ULID ' created:' TIMESTAMP ' -->'
+meta(Complete)  := '<!-- id:' ULID ' created:' TIMESTAMP ' completed:' TIMESTAMP ' -->'
+meta(Discarded) := '<!-- id:' ULID ' created:' TIMESTAMP ' discarded:' TIMESTAMP ' -->'
+tagline     := '- ' NAME NL
+TIMESTAMP   := YYYY '-' MM '-' DD 'T' hh ':' mm ':' ss 'Z'   (UTC)
+fence       := '`'{N} 'markdown' NL rawline+ '`'{N} NL         (N is 3 or more; at least one rawline is not blank)
 rawline     := any line that does not close the fence
-blank       := an empty line (outside desc blocks)
+blank       := an empty line (outside fences)
 ```
 
-Rules for hand edits:
+An example:
+
+````md
+### Application Security Posture Management (ASPM)
+
+<!-- id:01M3VXEYY3V9M2BMAMMK12GMBS created:2026-10-01T14:21:29Z -->
+
+- DevOps
+- Security
+
+```markdown
+Optional description
+```
+````
+
+Rules:
 
 - Keep the `<!-- version:N -->` line and the `# Learning` line exactly as
   the app wrote them. Never change the version number.
 - Keep all four sections, in this order: New, WIP, Complete, Discarded.
   Keep every section even when it is empty.
+- A topic's section depends on its status and its description. **New**: no
+  description. **WIP**: a description. **Complete**: a `completed:`
+  timestamp and a description. **Discarded**: a `discarded:` timestamp, and
+  a description if you like. Each section has exactly one metadata form
+  (see the grammar). A topic in the wrong section, or with the wrong
+  metadata for its section, is an error.
+- A `TIMESTAMP` is the full UTC form, `2026-09-16T14:32:07Z`. A plain date
+  is an error.
+- A tag is one line, `- NAME` (a hyphen, one space, the name, nothing
+  after it). The tag lines come directly after the metadata line, and the
+  fence (if there is one) directly after the tag lines. No blank lines are
+  between them. `*` and `+` are not list markers here. A line `- NAME`
+  inside a description is plain text.
+- A tag `NAME` is letters, digits, `_`, or `-`, 1 to 32 characters (Unicode
+  letters and digits are allowed, so `Übung` and `日本語` are valid names).
+  No spaces, commas, or `<!--`.
+- Every tag that a topic lists must be defined by a `tagdef` line above the
+  first section, with exactly the same upper and lower case. A tag that is
+  not defined is an error, not a silent drop. Tag definitions must be
+  unique, ignoring case. A tag color is `#` and 6 lower-case hex digits.
+- A file with no `tagdef` lines and no tag lines is a valid file. Every
+  topic in it has no tags.
 - A description is written inside a code fence. The opening line is N
   backticks and the word `markdown` (N is 3 or more). The closing line is
   exactly N backticks. Inside, write anything you want: headings, other
   comments, and blank lines are all plain text. GitHub shows the fence as a
   code box, so the headings in a description do not change the outline of
   the file.
-- The tag must be `markdown`. The app does not accept `md` or no tag.
+- The tag of the fence must be `markdown`. The app does not accept `md` or
+  no tag.
+- A fence must not be empty. If a topic has no description, write no fence.
 - The fence must have more backticks than the longest run of backticks at
   the start of any line in the description (after at most 3 spaces). The
   app writes the shortest fence that follows this rule. A longer fence that
@@ -442,31 +502,10 @@ Rules for hand edits:
 - If your fence is too short, an inner code fence closes the description
   too early. The rest of the text then causes a parse error with a line
   number. Make the outer fence longer to fix it.
-- The old markers `<!-- desc -->` and `<!-- /desc -->` are an error in a
-  version 3 file.
 - Write each headline on a single line. Do not put `<!--` in a headline.
-- A topic's section (New or WIP) depends on whether it has a description.
-  If you place a topic under the wrong one by hand, the app still loads it.
-  It shows a warning and fixes the placement the next time it saves.
-- A topic under **Complete** must have both a `completed:` timestamp and a
-  description. Without them, the app reports an error instead of guessing.
-- A topic cannot have both a `completed:` timestamp and a `discarded:`
-  timestamp. Two topics cannot share the same `id`. Both cases are errors.
-- A `TIMESTAMP` is either the full UTC form the app writes,
-  `2026-09-16T14:32:07Z`, or a plain date, `2026-09-16`, for files written
-  before the app tracked time of day. The app reads both. It only writes
-  the full form.
+- Two topics cannot share the same `id`.
 - The app always writes line endings as `\n`. It also accepts `\r\n` when
   it reads a file, and converts them.
-- A tag `NAME` is letters, digits, `_`, or `-`, 1 to 32 characters (Unicode
-  letters and digits are allowed, so `Übung` and `日本語` are valid names).
-  No spaces, commas, or `<!--`.
-- Every tag listed in a topic's `tags:` must be defined by a `tagdef` line
-  above the first section. A tag name that is not defined is an error, not
-  a silent drop — this keeps a hand-typed tag from being lost by accident.
-- A file with no `tagdef` lines and no `tags:` parts is still a valid file:
-  this is exactly what every file looked like before tags existed, and
-  every such topic is read as having no tags.
 
 ### Format versions
 
@@ -488,12 +527,13 @@ Each upgrade is safe with many devices at the same time: a write is based
 on the version of the file that the app read, and GitHub rejects it if the
 file changed. Then the app reads the file again.
 
-| Version | Change                                                                                    | First commit on `main` | Last commit on `main` |
-| ------- | ----------------------------------------------------------------------------------------- | ---------------------- | --------------------- |
-| 0       | No version line. Only the empty file. Migrated to 1.                                      | –                      | –                     |
-| 1       | First format. The comment `<!-- learning-tracker: v1 — … -->` below the title marks it.   | `5e6ee92`              | `21ba6fe`             |
-| 2       | The line `<!-- version:2 -->` above the title replaces the comment. Nothing else changes. | `66e7eb6`              | (fill after merge)    |
-| 3       | Each description is in a `markdown` code fence. The `<!-- desc -->` markers are removed.  | (fill after merge)     | current               |
+| Version | Change                                                                                                                                                                           | First commit on `main` | Last commit on `main` |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | --------------------- |
+| 0       | No version line. Only the empty file. Migrated to 1.                                                                                                                             | –                      | –                     |
+| 1       | First format. The comment `<!-- learning-tracker: v1 — … -->` below the title marks it.                                                                                          | `5e6ee92`              | `21ba6fe`             |
+| 2       | The line `<!-- version:2 -->` above the title replaces the comment. Nothing else changes.                                                                                        | `66e7eb6`              | `88bd1c2`             |
+| 3       | Each description is in a `markdown` code fence. The `<!-- desc -->` markers are removed.                                                                                         | `e87d6a9`              | (fill after merge)    |
+| 4       | Tags are a `- NAME` list below the metadata line. Plain dates become full timestamps, colors become lower case, empty fences are removed, topics in the wrong section are moved. | (fill after merge)     | current               |
 
 "First commit" is the first commit whose app writes this version. Fill in
 the hashes of a new version in a small commit after the merge. This command
@@ -620,7 +660,7 @@ tells the other tabs, and they read the new version.
 
 ## Future Work
 
-- Tags as list
 - Uncategorized functionality
 - Help users write STE in descriptions or check it
 - AI lookup / fact check
+- Glossary functionality

@@ -13,7 +13,7 @@ import {
   migrationMessage,
 } from '../format/commitMessage';
 import { describeUpgradeError, upgrade } from '../format/migrations/run';
-import { parse, type ParseError, type ParseWarning } from '../format/parse';
+import { parse, type ParseError } from '../format/parse';
 import { serialize } from '../format/serialize';
 import { CURRENT_VERSION } from '../format/version';
 import { getFile, putFile } from '../github/client';
@@ -84,16 +84,15 @@ function rateLimitDelayMs(retryAfterSeconds: number | null, attempt: number): nu
 /** True if the text parses back to exactly `board`. Guards every write against serializer bugs. */
 function roundTrips(text: string, board: Board): boolean {
   const parsed = parse(text);
-  return parsed.ok && boardsEqual(parsed.value.board, board);
+  return parsed.ok && boardsEqual(parsed.value, board);
 }
 
 /** What a text read from GitHub turned out to be. */
 type RemoteRead =
-  | { readonly kind: 'ready'; readonly board: Board; readonly warnings: readonly ParseWarning[] }
+  | { readonly kind: 'ready'; readonly board: Board }
   | {
       readonly kind: 'migrate';
       readonly board: Board;
-      readonly warnings: readonly ParseWarning[];
       /** The text of `board`, in the current format. */
       readonly text: string;
       readonly message: string;
@@ -114,7 +113,7 @@ function readRemote(text: string): RemoteRead {
   if (upgraded.value.kind === 'current') {
     const parsed = parse(text);
     if (!parsed.ok) return { kind: 'failed', error: parsed.error, tooNew: false };
-    return { kind: 'ready', board: parsed.value.board, warnings: parsed.value.warnings };
+    return { kind: 'ready', board: parsed.value };
   }
 
   const { from, steps } = upgraded.value;
@@ -123,7 +122,7 @@ function readRemote(text: string): RemoteRead {
     const reason = `Could not upgrade learning.md from format v${String(from)} to v${String(CURRENT_VERSION)}: the result is invalid (line ${String(parsed.error.line)}): ${parsed.error.reason}`;
     return { kind: 'failed', error: { line: 0, reason }, tooNew: false };
   }
-  const board = parsed.value.board;
+  const board = parsed.value;
   const serialized = serialize(board);
   if (!roundTrips(serialized, board)) {
     const reason = `Could not upgrade learning.md from format v${String(from)} to v${String(CURRENT_VERSION)}: the result could not be safely written back.`;
@@ -132,7 +131,6 @@ function readRemote(text: string): RemoteRead {
   return {
     kind: 'migrate',
     board,
-    warnings: parsed.value.warnings,
     text: serialized,
     message: migrationMessage(from, CURRENT_VERSION, steps),
   };
@@ -181,7 +179,6 @@ export const useBoardStore = defineStore('board', () => {
   const parseError = ref<ParseError | null>(null);
   /** True if `parseError` is because the file has a newer format version than this app knows. */
   const parseErrorTooNew = ref(false);
-  const warnings = ref<readonly ParseWarning[]>([]);
   const fileNotFound = ref(false);
   /** Set when GitHub rejects the token (401) or its permissions (403). The UI then opens the
    *  settings screen and resets this flag. */
@@ -372,7 +369,6 @@ export const useBoardStore = defineStore('board', () => {
       await writeMigration(read, file.sha, attempt);
       return;
     }
-    warnings.value = read.warnings;
     confirm(read.board, file.sha, file.text);
     rebaseLocal(read.board);
     settle();
@@ -392,7 +388,6 @@ export const useBoardStore = defineStore('board', () => {
     const result = await putFile(config(), { text: read.text, sha: readSha, message: read.message });
 
     if (result.ok) {
-      warnings.value = read.warnings;
       retryCount = 0;
       confirm(read.board, result.value.sha, read.text);
       rebaseLocal(read.board);
@@ -816,7 +811,6 @@ export const useBoardStore = defineStore('board', () => {
     conflict.value = null;
     parseError.value = null;
     parseErrorTooNew.value = false;
-    warnings.value = [];
     fileNotFound.value = false;
     unauthorized.value = false;
     notice.value = null;
@@ -866,7 +860,6 @@ export const useBoardStore = defineStore('board', () => {
     notice,
     parseError,
     parseErrorTooNew,
-    warnings,
     fileNotFound,
     unauthorized,
     conflict,

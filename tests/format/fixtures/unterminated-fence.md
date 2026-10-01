@@ -1,4 +1,4 @@
-<!-- version:3 -->
+<!-- version:4 -->
 
 # Learning
 
@@ -7,7 +7,7 @@
 ## WIP
 
 ### Never closed
-<!-- id:01M2KCX2QCRJYQJSQW6XNKE3NZ created:2026-09-10 -->
+<!-- id:01M2KCX2QCRJYQJSQW6XNKE3NZ created:2026-09-10T00:00:00Z -->
 ```markdown
 This description never ends.
 

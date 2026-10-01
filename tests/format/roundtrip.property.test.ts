@@ -28,12 +28,12 @@ import { parse } from '../../src/format/parse';
 import { serialize } from '../../src/format/serialize';
 import { TAG_PALETTE } from '../../src/tags/palette';
 
-// A mix of full timestamps and legacy date-only values, to exercise both formats.
+// Only the full UTC form is valid.
 const TIMESTAMPS: readonly IsoTimestamp[] = [
-  '2024-02-29',
+  '2024-02-29T12:00:00Z',
   '2025-01-01T00:00:00Z',
   '2025-12-31T23:59:59Z',
-  '2026-09-15',
+  '2026-09-15T09:30:00Z',
   '2026-06-30T08:15:42Z',
 ].map((d) => unwrap(makeIsoTimestamp(d)));
 
@@ -52,6 +52,7 @@ const evilLine: fc.Arbitrary<string> = fc.oneof(
   fc.constant('## Not a section'),
   fc.constant('### Not an item'),
   fc.constant('<!-- id:00000000000000000000000000 created:1999-01-01 -->'),
+  fc.constant('- a tag'),
   fc.constant('<!-- desc -->'),
   fc.constant('<!-- /desc -->'),
   fc.constant('```'),
@@ -83,7 +84,7 @@ const arbitraryOptionalDescription: fc.Arbitrary<Description | null> = arbitrary
   unwrap(makeOptionalDescription(text)),
 );
 
-// 0-4 tags, unique names ignoring case, colors from the palette plus a few upper-case hex values.
+// 0-4 tags, unique names ignoring case, colors from the palette only lower-case hex digits.
 const arbitraryTagName: fc.Arbitrary<TagName> = fc
   .string({ minLength: 1, maxLength: 10 })
   .map((s) => s.replace(/[^\p{L}\p{N}_-]/gu, 'x'))
@@ -92,7 +93,7 @@ const arbitraryTagName: fc.Arbitrary<TagName> = fc
 
 const arbitraryTagColor: fc.Arbitrary<HexColor> = fc.oneof(
   fc.constantFrom(...TAG_PALETTE.map((p) => p.color)),
-  fc.constantFrom('#AACBEE', '#F6C9A4', '#B9DCB8').map((c) => unwrap(makeHexColor(c))),
+  fc.constantFrom('#aacbee', '#f6c9a4', '#b9dcb8').map((c) => unwrap(makeHexColor(c))),
 );
 
 const [fallbackTagColor] = TAG_PALETTE;
@@ -187,8 +188,7 @@ describe('serialize/parse round trip', () => {
           const result = parse(text);
           expect(result.ok).toBe(true);
           if (!result.ok) return;
-          expect(result.value.warnings).toHaveLength(0);
-          expect(boardsEqual(result.value.board, board)).toBe(true);
+          expect(boardsEqual(result.value, board)).toBe(true);
         }),
         { numRuns: 10_000 },
       );

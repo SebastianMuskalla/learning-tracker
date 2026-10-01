@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { emptyBoard } from '../../src/domain/board';
 import {
   generateItemId,
+  makeDescription,
   makeHeadline,
   makeHexColor,
   makeIsoTimestamp,
@@ -12,7 +13,7 @@ import type { ActiveItem, Board } from '../../src/domain/types';
 import { fenceLength, HEADER_TITLE, serialize } from '../../src/format/serialize';
 import { versionLine } from '../../src/format/version';
 
-const HEADER = `${versionLine(3)}\n\n${HEADER_TITLE}`;
+const HEADER = `${versionLine(4)}\n\n${HEADER_TITLE}`;
 
 describe('serialize', () => {
   it('writes the header and all four section headings for an empty board', () => {
@@ -21,7 +22,7 @@ describe('serialize', () => {
   });
 
   it('starts the file with the version line, then the title', () => {
-    expect(serialize(emptyBoard()).startsWith('<!-- version:3 -->\n\n# Learning\n\n')).toBe(true);
+    expect(serialize(emptyBoard()).startsWith('<!-- version:4 -->\n\n# Learning\n\n')).toBe(true);
   });
 
   it('ends the file with a single trailing newline', () => {
@@ -46,7 +47,27 @@ describe('serialize', () => {
     );
   });
 
-  it('a board with no tags serializes byte-for-byte as before (no new lines)', () => {
+  it('writes the tag list between the metadata line and the fence', () => {
+    const vue = unwrap(makeTagName('vue'));
+    const item: ActiveItem = {
+      id: generateItemId(),
+      headline: unwrap(makeHeadline('Tagged')),
+      createdAt: unwrap(makeIsoTimestamp('2026-09-15T14:32:07Z')),
+      status: 'active',
+      description: unwrap(makeDescription('text')),
+      tags: [vue],
+    };
+    const board: Board = {
+      ...emptyBoard(),
+      tags: [{ name: vue, color: unwrap(makeHexColor('#aacbee')) }],
+      wip: [item],
+    };
+    expect(serialize(board)).toContain(
+      `<!-- id:${item.id} created:2026-09-15T14:32:07Z -->\n- vue\n\`\`\`markdown\ntext\n\`\`\`\n`,
+    );
+  });
+
+  it('a board with no tags has no tag lines', () => {
     const text = serialize(emptyBoard());
     expect(text).not.toContain('tag:');
     expect(text).toBe(`${HEADER}\n\n## New\n\n## WIP\n\n## Complete\n\n## Discarded\n`);
@@ -66,7 +87,7 @@ describe('serialize', () => {
     );
   });
 
-  it('an item with tags gets a tags: part in definition order; an item without tags gets none', () => {
+  it('an item with tags gets one `- NAME` line per tag, below the metadata; an item without tags gets none', () => {
     const vue = unwrap(makeTagName('vue'));
     const rust = unwrap(makeTagName('rust'));
     const color = unwrap(makeHexColor('#aacbee'));
@@ -95,8 +116,9 @@ describe('serialize', () => {
       new: [tagged, untagged],
     };
     const text = serialize(board);
-    expect(text).toContain(`<!-- id:${tagged.id} created:2026-09-15T14:32:07Z tags:vue,rust -->`);
-    expect(text).toContain(`<!-- id:${untagged.id} created:2026-09-15T14:32:07Z -->\n`);
+    expect(text).not.toContain('tags:');
+    expect(text).toContain(`<!-- id:${tagged.id} created:2026-09-15T14:32:07Z -->\n- vue\n- rust\n\n`);
+    expect(text).toContain(`<!-- id:${untagged.id} created:2026-09-15T14:32:07Z -->\n\n`);
   });
 });
 

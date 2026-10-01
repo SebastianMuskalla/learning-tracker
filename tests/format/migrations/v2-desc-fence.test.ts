@@ -3,8 +3,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { migrateV2 } from '../../../src/format/migrations/v2-desc-fence';
-import { parse } from '../../../src/format/parse';
-import { serialize } from '../../../src/format/serialize';
 
 const root = fileURLToPath(new URL('./fixtures/v2/', import.meta.url));
 const META = '<!-- id:01M2KCX2QA8VMTXY950V44DB2J created:2026-09-15 -->';
@@ -50,15 +48,9 @@ describe('migration 2 → 3', () => {
 describe('migration 2 → 3, frozen fixtures', () => {
   const names = readdirSync(root).filter((name) => !name.endsWith('.expected.md'));
 
-  it.each(names)('%s gives exactly what the serializer writes', (name) => {
+  it.each(names)('%s gives the expected output', (name) => {
     const output = migrateV2.migrate(readFileSync(`${root}${name}`, 'utf-8'));
-    expect(output.ok).toBe(true);
-    if (!output.ok) return;
-    const parsed = parse(output.value);
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
-    // Blank lines between tag definitions are allowed in a file but the serializer drops them.
-    const withoutTagGaps = (text: string): string => text.replace(/\n\n(?=<!-- tag:)/g, '\n');
-    expect(withoutTagGaps(serialize(parsed.value.board))).toBe(withoutTagGaps(output.value));
+    const expected = readFileSync(`${root}${name.replace(/\.md$/, '.expected.md')}`, 'utf-8');
+    expect(output).toEqual({ ok: true, value: expected });
   });
 });

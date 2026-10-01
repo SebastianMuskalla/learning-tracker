@@ -57,8 +57,8 @@ describe('makeIsoTimestamp', () => {
     expect(makeIsoTimestamp('2026-09-15T14:32:07Z')).toEqual({ ok: true, value: '2026-09-15T14:32:07Z' });
   });
 
-  it('accepts a legacy date-only value, keeping it as-is', () => {
-    expect(makeIsoTimestamp('2026-09-15')).toEqual({ ok: true, value: '2026-09-15' });
+  it('rejects a plain date', () => {
+    expect(makeIsoTimestamp('2026-09-15').ok).toBe(false);
   });
 
   it('rejects malformed strings', () => {
@@ -120,9 +120,12 @@ describe('makeTagName', () => {
 });
 
 describe('makeHexColor', () => {
-  it('accepts a 6-digit hex color, keeping the case as given', () => {
+  it('accepts a 6-digit lower-case hex color', () => {
     expect(makeHexColor('#aacbee')).toEqual({ ok: true, value: '#aacbee' });
-    expect(makeHexColor('#AACBEE')).toEqual({ ok: true, value: '#AACBEE' });
+  });
+
+  it('rejects upper-case hex digits', () => {
+    expect(makeHexColor('#AACBEE').ok).toBe(false);
   });
 
   it('rejects a color without a leading #', () => {

@@ -17,11 +17,11 @@ describe('parse — version line', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.line).toBe(1);
-    expect(result.error.reason).toContain('Expected "<!-- version:3 -->"');
+    expect(result.error.reason).toContain('Expected "<!-- version:4 -->"');
   });
 
   it('accepts several blank lines between the version line and the title', () => {
-    const text = fixture('empty.md').replace('<!-- version:3 -->\n\n', '<!-- version:3 -->\n\n\n\n');
+    const text = fixture('empty.md').replace('<!-- version:4 -->\n\n', '<!-- version:4 -->\n\n\n\n');
     expect(parse(text).ok).toBe(true);
   });
 });
@@ -31,26 +31,22 @@ describe('parse — valid files', () => {
     const result = parse(fixture('valid.md'));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.board.new).toHaveLength(2);
-    expect(result.value.board.wip).toHaveLength(1);
-    expect(result.value.board.complete).toHaveLength(1);
-    expect(result.value.board.discarded).toHaveLength(1);
-    expect(result.value.warnings).toHaveLength(0);
+    expect(result.value.new).toHaveLength(2);
+    expect(result.value.wip).toHaveLength(1);
+    expect(result.value.complete).toHaveLength(1);
+    expect(result.value.discarded).toHaveLength(1);
   });
 
   it('parses a file with no items in any section', () => {
     const result = parse(fixture('empty.md'));
-    expect(result).toEqual({
-      ok: true,
-      value: { board: { tags: [], new: [], wip: [], complete: [], discarded: [] }, warnings: [] },
-    });
+    expect(result).toEqual({ ok: true, value: { tags: [], new: [], wip: [], complete: [], discarded: [] } });
   });
 
   it('treats headings, fences, comments, blank lines and unicode inside a description as raw content', () => {
     const result = parse(fixture('evil-descriptions.md'));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const [item] = result.value.board.wip;
+    const [item] = result.value.wip;
     expect(item?.description).toContain('# Not a header');
     expect(item?.description).toContain('<!-- id:99999999999999999999999999 created:1999-01-01 -->');
     expect(item?.description).toContain('<!-- /desc -->\n````\nfour backticks');
@@ -62,22 +58,19 @@ describe('parse — valid files', () => {
     const result = parse(crlf);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.board.wip[0]?.description).not.toContain('\r');
+    expect(result.value.wip[0]?.description).not.toContain('\r');
   });
 
-  it('accepts a mix of full timestamps and legacy date-only values in the same file', () => {
-    const result = parse(fixture('mixed-timestamp-formats.md'));
+  it('keeps full timestamps as written', () => {
+    const result = parse(fixture('timestamps.md'));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.board.new).toMatchObject([
+    expect(result.value.new).toMatchObject([
       { headline: 'Full timestamp', createdAt: '2026-09-16T14:32:07Z' },
-      { headline: 'Legacy date-only', createdAt: '2026-09-15' },
+      { headline: 'Midnight timestamp', createdAt: '2026-09-15T00:00:00Z' },
     ]);
-    expect(result.value.board.complete).toMatchObject([
+    expect(result.value.complete).toMatchObject([
       { createdAt: '2026-09-01T08:00:00Z', completedAt: '2026-09-12T17:45:30Z' },
-    ]);
-    expect(result.value.board.discarded).toMatchObject([
-      { createdAt: '2026-08-20', discardedAt: '2026-09-02T09:15:00Z' },
     ]);
   });
 
@@ -85,28 +78,26 @@ describe('parse — valid files', () => {
     const result = parse(fixture('tags.md'));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.board.tags).toEqual([
+    expect(result.value.tags).toEqual([
       { name: 'vue', color: '#aacbee' },
       { name: 'rust', color: '#f6c9a4' },
     ]);
-    expect(result.value.board.new).toMatchObject([
+    expect(result.value.new).toMatchObject([
       { headline: 'No tags', tags: [] },
       { headline: 'One tag', tags: ['vue'] },
       { headline: 'Two tags', tags: ['vue', 'rust'] },
     ]);
   });
 
-  it('warns, but does not fail, when an active item sits under the wrong New/WIP heading', () => {
-    const text = fixture('empty.md').replace(
-      '## New\n',
-      '## New\n\n### Misplaced\n<!-- id:01M2KCX2QA8VMTXY950V44DB2J created:2026-09-15 -->\n```markdown\nhas a description\n```\n',
+  it('reads a `- NAME` line inside a description as text', () => {
+    const text = fixture('tags.md').replace(
+      '## WIP\n',
+      '## WIP\n\n### Text\n<!-- id:01M2KCX2QCRJYQJSQW6XNKE3P9 created:2026-09-15T00:00:00Z -->\n```markdown\n- vue\n- nothing\n```\n',
     );
     const result = parse(text);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.board.new).toHaveLength(0);
-    expect(result.value.board.wip).toHaveLength(1);
-    expect(result.value.warnings).toHaveLength(1);
+    expect(result.value.wip[0]).toMatchObject({ tags: [], description: '- vue\n- nothing' });
   });
 });
 
@@ -121,21 +112,45 @@ describe('parse — invalid files', () => {
     ['unterminated-fence.md', 11, 'Unterminated description (missing the closing fence "```")'],
     ['wrong-fence-language.md', 11, 'Expected a description fence "```markdown", found "```md"'],
     ['bad-closing-fence.md', 13, 'The closing fence must be exactly 3 backticks, found "````"'],
-    ['desc-marker-in-v3.md', 11, 'Expected section heading "## Complete", found "<!-- desc -->"'],
-    ['complete-without-desc.md', 13, 'A Complete item must have a description'],
-    ['complete-without-completed-tag.md', 16, 'Item under Complete is missing the required metadata'],
-    ['malformed-meta.md', 8, 'Malformed metadata comment'],
-    ['both-completed-and-discarded.md', 12, 'An item cannot have both completed: and discarded: metadata'],
+    ['desc-marker-in-v3.md', 9, 'Expected section heading "## WIP", found "<!-- desc -->"'],
+    ['complete-without-desc.md', 12, 'A Complete item must have a description'],
+    ['complete-without-completed-tag.md', 12, 'Malformed metadata for an item under Complete'],
+    ['malformed-meta.md', 8, 'Malformed metadata for an item under New'],
+    ['both-completed-and-discarded.md', 12, 'Malformed metadata for an item under Complete'],
     ['bad-header.md', 3, 'Expected "# Learning", found "# My Learning Log"'],
-    ['unknown-tag-on-item.md', 10, 'Unknown tag "rust" on item "Some item"'],
+    ['unknown-tag-on-item.md', 11, 'Unknown tag "rust" on this item'],
     ['duplicate-tag-definition.md', 6, 'Duplicate tag "Vue"'],
-    ['invalid-tag-color.md', 5, 'Invalid tag color: "#zzzzzz" is not a valid color (expected #rrggbb)'],
+    [
+      'invalid-tag-color.md',
+      5,
+      'Invalid tag color: "#zzzzzz" is not a valid color (expected # and 6 lower-case hex digits)',
+    ],
     [
       'invalid-tag-name.md',
       5,
       'Expected section heading "## New", found "<!-- tag:web dev color:#aacbee -->"',
     ],
-    ['duplicate-tag-on-item.md', 10, 'Duplicate tag "vue" on item "Some item"'],
+    ['duplicate-tag-on-item.md', 12, 'Duplicate tag "vue" on this item'],
+    ['completed-under-wip.md', 10, 'Malformed metadata for an item under WIP'],
+    ['discarded-under-complete.md', 12, 'Malformed metadata for an item under Complete'],
+    ['description-under-new.md', 8, 'An item with a description must be under WIP, not New'],
+    ['no-description-under-wip.md', 10, 'An item without a description must be under New, not WIP'],
+    ['empty-fence.md', 11, 'Empty description'],
+    ['plain-date.md', 8, 'Malformed metadata for an item under New'],
+    ['uppercase-color.md', 5, 'Invalid tag color: "#AACBEE"'],
+    ['tags-in-metadata.md', 10, 'Malformed metadata for an item under New'],
+    ['tag-wrong-case.md', 11, 'Unknown tag "Vue" on this item'],
+    ['tag-star-marker.md', 12, 'Expected section heading "## WIP", found "* vue"'],
+    ['tag-plus-marker.md', 12, 'Expected section heading "## WIP", found "+ vue"'],
+    ['tag-no-space.md', 12, 'Expected section heading "## WIP", found "-vue"'],
+    ['tag-two-spaces.md', 12, 'Expected section heading "## WIP", found "-  vue"'],
+    ['tag-trailing-space.md', 12, 'Expected section heading "## WIP", found "- vue "'],
+    ['tag-empty.md', 12, 'Expected section heading "## WIP", found "- "'],
+    ['tag-with-comma.md', 12, 'Invalid tag: "vue,rust" is not a valid tag name'],
+    ['blank-before-tags.md', 12, 'Expected section heading "## WIP", found "- vue"'],
+    ['blank-inside-tags.md', 14, 'Expected section heading "## WIP", found "- rust"'],
+    ['blank-before-fence.md', 13, 'Expected section heading "## WIP", found "```markdown"'],
+    ['tag-after-fence.md', 16, 'Expected section heading "## Complete", found "- vue"'],
     [
       'tag-definition-after-new.md',
       7,
@@ -162,16 +177,7 @@ describe('parse — fences', () => {
     const result = parse(text);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.board.wip[0]?.description).toContain('## Notes');
-  });
-
-  it('reads a fence with only blank lines as no description', () => {
-    const text = fixture('wrong-fence-language.md').replace('```md\ntext\n```', '```markdown\n\n```');
-    const result = parse(text);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.board.new).toHaveLength(1);
-    expect(result.value.board.wip).toHaveLength(0);
+    expect(result.value.wip[0]?.description).toContain('## Notes');
   });
 
   it('rejects a closing fence with trailing spaces', () => {
@@ -182,11 +188,11 @@ describe('parse — fences', () => {
 
 describe('parse — error messages (E8)', () => {
   it('never shows internal JSON to the user', () => {
-    const text = fixture('valid.md').replace('created:2026-09-15', 'created:2026-13-45');
+    const text = fixture('valid.md').replace('created:2026-09-15T00:00:00Z', 'created:2026-13-45T00:00:00Z');
     const result = parse(text);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.reason).toContain('"2026-13-45" is not a valid timestamp');
+    expect(result.error.reason).toContain('"2026-13-45T00:00:00Z" is not a valid timestamp');
     expect(result.error.reason).not.toContain('{');
   });
 });

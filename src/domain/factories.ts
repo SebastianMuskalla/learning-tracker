@@ -24,24 +24,22 @@ export function describeValidationError(error: ValidationError): string {
     case 'EmptyDescription':
       return 'the description is empty';
     case 'InvalidIsoTimestamp':
-      return `"${error.value}" is not a valid timestamp (expected YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DD)`;
+      return `"${error.value}" is not a valid timestamp (expected YYYY-MM-DDTHH:MM:SSZ)`;
     case 'InvalidItemId':
       return `"${error.value}" is not a valid item id (expected a ULID)`;
     case 'InvalidTagName':
       return `"${error.value}" is not a valid tag name (letters, digits, "_" or "-", up to 32 characters)`;
     case 'InvalidHexColor':
-      return `"${error.value}" is not a valid color (expected #rrggbb)`;
+      return `"${error.value}" is not a valid color (expected # and 6 lower-case hex digits)`;
   }
 }
 
-// Full UTC timestamp, as written by this app from here on: `2026-09-16T14:32:07Z`.
+// Full UTC timestamp: `2026-09-16T14:32:07Z`.
 const ISO_TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
-// Legacy date-only value, as written before timestamps were tracked: `2026-09-16`.
-const ISO_DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 // Letters, digits, `_`, `-`; no spaces, no commas, no `<`/`>`. The `u` flag makes `\p{L}`/`\p{N}`
 // match letters and digits from any script, not just ASCII.
 const TAG_NAME_RE = /^[\p{L}\p{N}_-]{1,32}$/u;
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/;
 
 const nextUlid = monotonicFactory();
 
@@ -97,11 +95,7 @@ function stripBlankEdges(text: string): string {
   return lines.slice(start, end + 1).join('\n');
 }
 
-/**
- * Accepts either a full UTC timestamp (`2026-09-16T14:32:07Z`, what the app writes from here on)
- * or a legacy date-only value (`2026-09-16`, what older versions of the app wrote); both are
- * kept as given rather than normalised, so a legacy value round-trips without fabricating a time.
- */
+/** Accepts only the full UTC form (`2026-09-16T14:32:07Z`). The value is kept as given. */
 export function makeIsoTimestamp(raw: string): Result<IsoTimestamp, ValidationError> {
   const fullMatch = ISO_TIMESTAMP_RE.exec(raw);
   if (fullMatch) {
@@ -115,15 +109,6 @@ export function makeIsoTimestamp(raw: string): Result<IsoTimestamp, ValidationEr
       number,
     ];
     if (!isRealCalendarDate(y, mo, d) || h > 23 || mi > 59 || s > 59) {
-      return err({ type: 'InvalidIsoTimestamp', value: raw });
-    }
-    return ok(raw as IsoTimestamp);
-  }
-
-  const dateMatch = ISO_DATE_ONLY_RE.exec(raw);
-  if (dateMatch) {
-    const [, y, mo, d] = dateMatch.map(Number) as [number, number, number, number];
-    if (!isRealCalendarDate(y, mo, d)) {
       return err({ type: 'InvalidIsoTimestamp', value: raw });
     }
     return ok(raw as IsoTimestamp);
@@ -149,7 +134,7 @@ export function makeTagName(raw: string): Result<TagName, ValidationError> {
   return ok(trimmed as TagName);
 }
 
-/** Kept as written (like timestamps), not normalised; the app itself always writes lower case. */
+/** Accepts lower-case hex digits only, so a color has one way to be written. */
 export function makeHexColor(raw: string): Result<HexColor, ValidationError> {
   if (!HEX_COLOR_RE.test(raw)) {
     return err({ type: 'InvalidHexColor', value: raw });
