@@ -116,6 +116,21 @@ describe('switching repositories (C5)', () => {
   });
 });
 
+describe('creating a tag', () => {
+  it('rejects the reserved name and sends no command', async () => {
+    const store = await loadBoard(emptyBoard());
+    const wrapper = mountSetup();
+
+    await wrapper.get('input[aria-label="New tag name"]').setValue('uncategorized');
+    await wrapper.get('input[aria-label="New tag name"]').trigger('keyup.enter');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('"Uncategorized" is a reserved name.');
+    expect(store.board.tags).toEqual([]);
+    wrapper.unmount();
+  });
+});
+
 describe('deleting a tag', () => {
   it('shows how many items use the tag, in a modal dialog', async () => {
     const tag = unwrap(makeTagName('vue'));

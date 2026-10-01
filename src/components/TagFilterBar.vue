@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import { RESERVED_TAG_NAME } from '../domain/factories';
 import type { Tag } from '../domain/types';
 import { useTagFilterStore } from '../store/tagFilter';
 import TagChip from './TagChip.vue';
 
-defineProps<{ readonly tags: readonly Tag[] }>();
+defineProps<{
+  readonly tags: readonly Tag[];
+  /** True if at least one item has no tags. Then the "Uncategorized" chip is shown. */
+  readonly showUncategorized: boolean;
+}>();
 
 const tagFilterStore = useTagFilterStore();
 </script>
@@ -19,6 +24,16 @@ const tagFilterStore = useTagFilterStore();
       interactive
       @click="tagFilterStore.toggle(tag.name)"
     />
+    <TagChip
+      v-if="showUncategorized"
+      class="uncategorized-chip"
+      :name="RESERVED_TAG_NAME"
+      color="var(--uncategorized-bg)"
+      ink="var(--uncategorized-ink)"
+      :mode="tagFilterStore.uncategorizedActive ? 'active' : 'normal'"
+      interactive
+      @click="tagFilterStore.toggleUncategorized()"
+    />
   </div>
 </template>
 
@@ -32,5 +47,9 @@ const tagFilterStore = useTagFilterStore();
   max-width: 48rem;
   margin: 0 auto;
   width: 100%;
+}
+
+.uncategorized-chip {
+  border-color: var(--text-muted);
 }
 </style>

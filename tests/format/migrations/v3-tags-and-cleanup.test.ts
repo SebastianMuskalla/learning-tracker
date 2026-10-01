@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { migrateV3 } from '../../../src/format/migrations/v3-tags-and-cleanup';
+import { migrateV4 } from '../../../src/format/migrations/v4-reserved-uncategorized';
 import { parse } from '../../../src/format/parse';
 import { serialize } from '../../../src/format/serialize';
 
@@ -101,11 +102,15 @@ describe('migration 3 → 4, frozen fixtures', () => {
 
   it.each(names)('%s gives exactly what the serializer writes', (name) => {
     const output = migrated(readFileSync(`${root}${name}`, 'utf-8'));
-    const parsed = parse(output);
+    // The parser reads the current version only, so the output goes through the next migration first.
+    const next = migrateV4.migrate(output);
+    expect(next.ok).toBe(true);
+    if (!next.ok) return;
+    const parsed = parse(next.value);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     // The serializer drops the blank lines between tag definitions and at the end of the file.
     const normalise = (text: string): string => text.replace(/\n\n(?=<!-- tag:)/g, '\n').trimEnd();
-    expect(normalise(serialize(parsed.value))).toBe(normalise(output));
+    expect(normalise(serialize(parsed.value))).toBe(normalise(next.value));
   });
 });

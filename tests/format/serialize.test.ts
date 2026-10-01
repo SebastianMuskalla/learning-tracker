@@ -13,7 +13,7 @@ import type { ActiveItem, Board } from '../../src/domain/types';
 import { fenceLength, HEADER_TITLE, serialize } from '../../src/format/serialize';
 import { versionLine } from '../../src/format/version';
 
-const HEADER = `${versionLine(4)}\n\n${HEADER_TITLE}`;
+const HEADER = `${versionLine(5)}\n\n${HEADER_TITLE}`;
 
 describe('serialize', () => {
   it('writes the header and all four section headings for an empty board', () => {
@@ -22,7 +22,7 @@ describe('serialize', () => {
   });
 
   it('starts the file with the version line, then the title', () => {
-    expect(serialize(emptyBoard()).startsWith('<!-- version:4 -->\n\n# Learning\n\n')).toBe(true);
+    expect(serialize(emptyBoard()).startsWith('<!-- version:5 -->\n\n# Learning\n\n')).toBe(true);
   });
 
   it('ends the file with a single trailing newline', () => {

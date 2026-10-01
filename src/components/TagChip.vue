@@ -1,12 +1,24 @@
 <script setup lang="ts">
-const { name, color, mode, interactive } = defineProps<{
+import { computed } from 'vue';
+
+const {
+  name,
+  color,
+  mode,
+  interactive,
+  ink = 'var(--tag-ink)',
+} = defineProps<{
   readonly name: string;
   readonly color: string;
   readonly mode: 'normal' | 'muted' | 'active';
   readonly interactive?: boolean;
+  /** The text color. The default is the dark ink for the pastel tag colors. */
+  readonly ink?: string;
 }>();
 
 defineEmits<{ click: [] }>();
+
+const style = computed(() => ({ '--tag-color': color, '--chip-ink': ink }));
 </script>
 
 <template>
@@ -15,14 +27,14 @@ defineEmits<{ click: [] }>();
     type="button"
     class="chip"
     :class="mode"
-    :style="{ '--tag-color': color }"
+    :style="style"
     :aria-pressed="mode !== 'muted'"
     @click="$emit('click')"
   >
     <i v-if="mode === 'active'" class="fa-solid fa-check" aria-hidden="true"></i>
     {{ name }}
   </button>
-  <span v-else class="chip" :class="mode" :style="{ '--tag-color': color }">{{ name }}</span>
+  <span v-else class="chip" :class="mode" :style="style">{{ name }}</span>
 </template>
 
 <style scoped>
@@ -31,7 +43,7 @@ defineEmits<{ click: [] }>();
   align-items: center;
   gap: 0.3em;
   background: var(--tag-color);
-  color: var(--tag-ink);
+  color: var(--chip-ink);
   border-radius: 999px;
   border: 1px solid transparent;
   font-size: 0.8rem;

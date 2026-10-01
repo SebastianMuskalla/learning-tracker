@@ -113,6 +113,17 @@ describe('makeTagName', () => {
     expect(makeTagName('<!--').ok).toBe(false);
   });
 
+  it('rejects the reserved name, ignoring case', () => {
+    for (const name of ['Uncategorized', 'uncategorized', 'UNCATEGORIZED', ' uNcAtEgOrIzEd ']) {
+      expect(makeTagName(name)).toMatchObject({ ok: false, error: { type: 'ReservedTagName' } });
+    }
+  });
+
+  it('accepts names that only look like the reserved name', () => {
+    expect(makeTagName('Uncategorized2').ok).toBe(true);
+    expect(makeTagName('un-categorized').ok).toBe(true);
+  });
+
   it('rejects a name longer than 32 characters', () => {
     expect(makeTagName('a'.repeat(33)).ok).toBe(false);
     expect(makeTagName('a'.repeat(32)).ok).toBe(true);

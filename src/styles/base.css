@@ -32,6 +32,11 @@
   /* Tag chips are always pastel, so the same dark ink reads well on them in both themes. */
   --tag-ink: #1d1b18;
 
+  /* The "Uncategorized" filter chip: dark gray in both themes, with white text (contrast about
+   * 9:1). The light outline keeps it visible on the pure black page of the dark theme. */
+  --uncategorized-bg: #4a4743;
+  --uncategorized-ink: #ffffff;
+
   /* Code blocks in a rendered description. The syntax colors follow GitHub's light and dark
    * themes, adjusted so each one has a contrast of at least 4.5:1 against --code-bg. */
   --code-bg: light-dark(#f3f1ec, #1a1916);

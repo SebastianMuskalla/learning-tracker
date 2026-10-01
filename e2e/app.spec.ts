@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { emptyBoard } from '../src/domain/board';
 import { applyCommand } from '../src/domain/commands';
-import { makeHeadline } from '../src/domain/factories';
+import { makeHeadline, makeHexColor, makeTagName } from '../src/domain/factories';
 import { unwrap } from '../src/domain/result';
 import type { Board } from '../src/domain/types';
 import { parse } from '../src/format/parse';
@@ -117,6 +117,35 @@ test('the same item changed on both sides shows the conflict dialog', async ({ p
   expect(headlinesOnGithub(github)).toEqual(['Theirs']);
 });
 
+test('the Uncategorized chip filters untagged items and disappears after tagging', async ({ page }) => {
+  const vue = unwrap(makeTagName('vue'));
+  let board = boardWith('Plain', 'Tagged');
+  board = unwrap(
+    applyCommand(board, { type: 'createTag', name: vue, color: unwrap(makeHexColor('#aacbee')) }),
+  );
+  const taggedId = board.new.find((item) => item.headline === 'Tagged')?.id;
+  if (taggedId === undefined) throw new Error('fixture has no item');
+  board = unwrap(applyCommand(board, { type: 'tagItem', id: taggedId, tag: vue }));
+  const github = new FakeGithub(serialize(board));
+  await github.install(page);
+  await configure(page);
+  await page.goto('./');
+
+  const filterBar = page.locator('.tag-filter-bar');
+  await filterBar.getByRole('button', { name: 'Uncategorized' }).click();
+  await expect(page.locator('.columns').getByText('Plain')).toBeVisible();
+  await expect(page.locator('.columns').getByText('Tagged')).toBeHidden();
+
+  await page.locator('.columns').getByText('Plain').click();
+  await page.locator('.drawer').getByRole('button', { name: 'vue' }).click();
+  await waitUntilSaved(page);
+
+  await expect(filterBar.getByRole('button', { name: 'Uncategorized' })).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.columns').getByText('Tagged')).toBeVisible();
+  await expect(page.locator('.columns').getByText('Plain')).toBeVisible();
+});
+
 test('an empty file is upgraded to the current format', async ({ page }) => {
   const github = new FakeGithub('');
   await github.install(page);
@@ -126,7 +155,7 @@ test('an empty file is upgraded to the current format', async ({ page }) => {
   await waitUntilSaved(page);
 
   expect(github.putMessages).toHaveLength(1);
-  expect(github.putMessages[0]).toMatch(/^Upgrade learning\.md from format v0 to v4/);
+  expect(github.putMessages[0]).toMatch(/^Upgrade learning\.md from format v0 to v5/);
   expect(github.text).toBe(serialize(emptyBoard()));
 });
 
@@ -157,8 +186,8 @@ test('a version-1 file is upgraded and keeps its items', async ({ page }) => {
   await waitUntilSaved(page);
 
   expect(github.putMessages).toEqual([
-    'Upgrade learning.md from format v1 to v4\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence\nv3 → v4: move tags to a list, use full timestamps and lower-case colors, remove empty descriptions, fix New/WIP placement',
+    'Upgrade learning.md from format v1 to v5\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence\nv3 → v4: move tags to a list, use full timestamps and lower-case colors, remove empty descriptions, fix New/WIP placement\nv4 → v5: remove the tag "Uncategorized", which is now a reserved name',
   ]);
-  expect(github.text?.startsWith('<!-- version:4 -->\n\n# Learning\n\n')).toBe(true);
+  expect(github.text?.startsWith('<!-- version:5 -->\n\n# Learning\n\n')).toBe(true);
   expect(headlinesOnGithub(github)).toEqual(['Old topic']);
 });

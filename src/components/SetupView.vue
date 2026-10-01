@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { makeTagName } from '../domain/factories';
+import { makeTagName, RESERVED_TAG_NAME } from '../domain/factories';
 import { allItems, type HexColor, type Tag, type TagName } from '../domain/types';
 import { getFile } from '../github/client';
 import type { GithubClientError } from '../github/types';
@@ -79,7 +79,10 @@ function addTag(): void {
   newTagError.value = '';
   const result = makeTagName(newTagName.value);
   if (!result.ok) {
-    newTagError.value = 'Enter a tag name: letters, digits, "_" or "-", up to 32 characters.';
+    newTagError.value =
+      result.error.type === 'ReservedTagName'
+        ? `"${RESERVED_TAG_NAME}" is a reserved name.`
+        : 'Enter a tag name: letters, digits, "_" or "-", up to 32 characters.';
     return;
   }
   const name = result.value;

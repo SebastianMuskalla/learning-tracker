@@ -250,8 +250,21 @@ same "x of y" style applies while searching, for the same reason. Dragging
 to reorder is paused while a tag filter is active, for the same reason it
 pauses during a search.
 
-Which tags are active is remembered by your browser (not stored in
-`learning.md`), so it survives a reload but is not shared between devices
+Next to the tag chips, the last chip is **Uncategorized**. It has a dark gray
+background. It is a filter for topics that have no tags. It follows the same
+rules as a tag chip: click it to make it active, and it combines with the active
+tag chips with "or" (a topic is shown when it has an active tag, or when it has
+no tags and **Uncategorized** is active). The app shows it only when at least
+one tag exists and at least one topic has no tags. If the last topic without
+tags gets a tag (or is deleted, or all tags are deleted), the chip disappears.
+If it was active, the app turns it off and forgets it. The app does this only
+after it loaded `learning.md` without an error.
+
+The name `Uncategorized` is reserved, ignoring case. You cannot create a tag
+with this name, and the parser rejects a file that has one.
+
+Which tags are active, and if **Uncategorized** is active, is remembered by
+your browser (not stored in `learning.md`), so it survives a reload but is not shared between devices
 or with anyone you share the repository with.
 
 ## Development
@@ -417,7 +430,7 @@ good version is always in the git history, so a mistake does not lose data.
 
 ```
 file        := header tagdef* blank* section('New') section('WIP') section('Complete') section('Discarded')
-header      := '<!-- version:4 -->' NL blank* '# Learning' NL blank*
+header      := '<!-- version:5 -->' NL blank* '# Learning' NL blank*
 tagdef      := '<!-- tag:' NAME ' color:#' HEX6LOWER ' -->' NL blank*
 section(S)  := '## ' S NL blank* item(S)*
 item(S)     := '### ' headline NL
@@ -476,7 +489,8 @@ Rules:
   inside a description is plain text.
 - A tag `NAME` is letters, digits, `_`, or `-`, 1 to 32 characters (Unicode
   letters and digits are allowed, so `Übung` and `日本語` are valid names).
-  No spaces, commas, or `<!--`.
+  No spaces, commas, or `<!--`. The name `Uncategorized` is reserved and
+  not allowed, ignoring case (it is the name of a filter chip).
 - Every tag that a topic lists must be defined by a `tagdef` line above the
   first section, with exactly the same upper and lower case. A tag that is
   not defined is an error, not a silent drop. Tag definitions must be
@@ -532,8 +546,9 @@ file changed. Then the app reads the file again.
 | 0       | No version line. Only the empty file. Migrated to 1.                                                                                                                             | –                      | –                     |
 | 1       | First format. The comment `<!-- learning-tracker: v1 — … -->` below the title marks it.                                                                                          | `5e6ee92`              | `21ba6fe`             |
 | 2       | The line `<!-- version:2 -->` above the title replaces the comment. Nothing else changes.                                                                                        | `66e7eb6`              | `88bd1c2`             |
-| 3       | Each description is in a `markdown` code fence. The `<!-- desc -->` markers are removed.                                                                                         | `e87d6a9`              | (fill after merge)    |
-| 4       | Tags are a `- NAME` list below the metadata line. Plain dates become full timestamps, colors become lower case, empty fences are removed, topics in the wrong section are moved. | (fill after merge)     | current               |
+| 3       | Each description is in a `markdown` code fence. The `<!-- desc -->` markers are removed.                                                                                         | `e87d6a9`              | `e87d6a9`             |
+| 4       | Tags are a `- NAME` list below the metadata line. Plain dates become full timestamps, colors become lower case, empty fences are removed, topics in the wrong section are moved. | `bd31a27`              | (fill after merge)    |
+| 5       | The tag name `Uncategorized` is reserved, ignoring case. Such a tag is removed from the tag list and from every topic.                                                           | (fill after merge)     | current               |
 
 "First commit" is the first commit whose app writes this version. Fill in
 the hashes of a new version in a small commit after the merge. This command
@@ -660,7 +675,6 @@ tells the other tabs, and they read the new version.
 
 ## Future Work
 
-- Uncategorized functionality
 - Help users write STE in descriptions or check it
 - AI lookup / fact check
 - Glossary functionality

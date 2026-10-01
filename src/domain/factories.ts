@@ -10,7 +10,11 @@ export type ValidationError =
   | { readonly type: 'InvalidIsoTimestamp'; readonly value: string }
   | { readonly type: 'InvalidItemId'; readonly value: string }
   | { readonly type: 'InvalidTagName'; readonly value: string }
+  | { readonly type: 'ReservedTagName'; readonly value: string }
   | { readonly type: 'InvalidHexColor'; readonly value: string };
+
+/** The name of the filter chip for items without tags. No tag can have this name (ignoring case). */
+export const RESERVED_TAG_NAME = 'Uncategorized';
 
 /** A short text for the user that explains a validation error. */
 export function describeValidationError(error: ValidationError): string {
@@ -29,6 +33,8 @@ export function describeValidationError(error: ValidationError): string {
       return `"${error.value}" is not a valid item id (expected a ULID)`;
     case 'InvalidTagName':
       return `"${error.value}" is not a valid tag name (letters, digits, "_" or "-", up to 32 characters)`;
+    case 'ReservedTagName':
+      return `"${RESERVED_TAG_NAME}" is a reserved name`;
     case 'InvalidHexColor':
       return `"${error.value}" is not a valid color (expected # and 6 lower-case hex digits)`;
   }
@@ -130,6 +136,9 @@ export function makeTagName(raw: string): Result<TagName, ValidationError> {
   const trimmed = raw.trim();
   if (!TAG_NAME_RE.test(trimmed)) {
     return err({ type: 'InvalidTagName', value: raw });
+  }
+  if (trimmed.toLowerCase() === RESERVED_TAG_NAME.toLowerCase()) {
+    return err({ type: 'ReservedTagName', value: raw });
   }
   return ok(trimmed as TagName);
 }

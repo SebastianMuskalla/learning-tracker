@@ -1057,7 +1057,7 @@ describe('upgrading learning.md', () => {
     vi.useRealTimers();
   });
 
-  it('writes a v1 file as v4 in one commit, with the sha that was read', async () => {
+  it('writes a v1 file as v5 in one commit, with the sha that was read', async () => {
     const { board } = setup();
     getFile.mockResolvedValue({ ok: true, value: { text: V1_TEXT, sha: 'sha-1' } });
     putFile.mockResolvedValue({ ok: true, value: { sha: 'sha-2' } });
@@ -1069,7 +1069,7 @@ describe('upgrading learning.md', () => {
       text: CURRENT_TEXT,
       sha: 'sha-1',
       message:
-        'Upgrade learning.md from format v1 to v4\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence\nv3 → v4: move tags to a list, use full timestamps and lower-case colors, remove empty descriptions, fix New/WIP placement',
+        'Upgrade learning.md from format v1 to v5\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence\nv3 → v4: move tags to a list, use full timestamps and lower-case colors, remove empty descriptions, fix New/WIP placement\nv4 → v5: remove the tag "Uncategorized", which is now a reserved name',
     });
     expect(board.sha).toBe('sha-2');
     expect(board.baseText).toBe(CURRENT_TEXT);
@@ -1088,7 +1088,7 @@ describe('upgrading learning.md', () => {
     const input = putFile.mock.calls[0]?.[1];
     expect(input?.text).toBe(CURRENT_TEXT);
     expect(input?.message).toMatch(
-      /^Upgrade learning\.md from format v0 to v4\n\nv0 → v1: .+\nv1 → v2: .+\nv2 → v3: .+\nv3 → v4: .+$/,
+      /^Upgrade learning\.md from format v0 to v5\n\nv0 → v1: .+\nv1 → v2: .+\nv2 → v3: .+\nv3 → v4: .+\nv4 → v5: .+$/,
     );
     expect(board.sha).toBe('sha-2');
   });
@@ -1106,12 +1106,12 @@ describe('upgrading learning.md', () => {
     const { board } = setup();
     getFile.mockResolvedValue({
       ok: true,
-      value: { text: CURRENT_TEXT.replace('version:4', 'version:5'), sha: 'sha-1' },
+      value: { text: CURRENT_TEXT.replace('version:5', 'version:6'), sha: 'sha-1' },
     });
 
     await board.load();
 
-    expect(board.parseError?.reason).toContain('uses format version 5');
+    expect(board.parseError?.reason).toContain('uses format version 6');
     expect(board.parseErrorTooNew).toBe(true);
     expect(board.canWrite).toBe(false);
     expect(board.syncStatus).toBe('error');
@@ -1228,7 +1228,7 @@ describe('upgrading learning.md', () => {
     putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
     getFile.mockResolvedValueOnce({
       ok: true,
-      value: { text: CURRENT_TEXT.replace('version:4', 'version:5'), sha: 'sha-9' },
+      value: { text: CURRENT_TEXT.replace('version:5', 'version:6'), sha: 'sha-9' },
     });
     await vi.advanceTimersByTimeAsync(1000);
 

@@ -17,11 +17,11 @@ describe('parse — version line', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.line).toBe(1);
-    expect(result.error.reason).toContain('Expected "<!-- version:4 -->"');
+    expect(result.error.reason).toContain('Expected "<!-- version:5 -->"');
   });
 
   it('accepts several blank lines between the version line and the title', () => {
-    const text = fixture('empty.md').replace('<!-- version:4 -->\n\n', '<!-- version:4 -->\n\n\n\n');
+    const text = fixture('empty.md').replace('<!-- version:5 -->\n\n', '<!-- version:5 -->\n\n\n\n');
     expect(parse(text).ok).toBe(true);
   });
 });
@@ -130,6 +130,8 @@ describe('parse — invalid files', () => {
       5,
       'Expected section heading "## New", found "<!-- tag:web dev color:#aacbee -->"',
     ],
+    ['reserved-tag-definition.md', 5, 'Invalid tag name: "Uncategorized" is a reserved name'],
+    ['reserved-tag-line.md', 9, 'Invalid tag: "Uncategorized" is a reserved name'],
     ['duplicate-tag-on-item.md', 12, 'Duplicate tag "vue" on this item'],
     ['completed-under-wip.md', 10, 'Malformed metadata for an item under WIP'],
     ['discarded-under-complete.md', 12, 'Malformed metadata for an item under Complete'],

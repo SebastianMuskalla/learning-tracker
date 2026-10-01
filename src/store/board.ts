@@ -864,6 +864,7 @@ export const useBoardStore = defineStore('board', () => {
     unauthorized,
     conflict,
     canWrite,
+    loaded,
     hasUnsavedWork,
     load,
     refresh,

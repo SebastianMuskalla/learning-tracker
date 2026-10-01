@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import type { TagName } from '../domain/types';
 
 const STORAGE_KEY = 'learning-tracker:active-tags';
+const UNCATEGORIZED_STORAGE_KEY = 'learning-tracker:filter-uncategorized';
 
 function loadPersisted(): Set<TagName> {
   try {
@@ -25,9 +26,30 @@ function persist(names: ReadonlySet<TagName>): void {
   }
 }
 
+function loadUncategorized(): boolean {
+  try {
+    return localStorage.getItem(UNCATEGORIZED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistUncategorized(active: boolean): void {
+  try {
+    if (active) {
+      localStorage.setItem(UNCATEGORIZED_STORAGE_KEY, 'true');
+    } else {
+      localStorage.removeItem(UNCATEGORIZED_STORAGE_KEY);
+    }
+  } catch {
+    // Storage unavailable: the chip still works for this session, just not remembered.
+  }
+}
+
 export const useTagFilterStore = defineStore('tagFilter', () => {
   const activeNames = ref<Set<TagName>>(loadPersisted());
-  const isActive = computed(() => activeNames.value.size > 0);
+  const uncategorizedActive = ref(loadUncategorized());
+  const isActive = computed(() => activeNames.value.size > 0 || uncategorizedActive.value);
 
   function toggle(name: TagName): void {
     const next = new Set(activeNames.value);
@@ -40,10 +62,29 @@ export const useTagFilterStore = defineStore('tagFilter', () => {
     persist(next);
   }
 
+  function toggleUncategorized(): void {
+    uncategorizedActive.value = !uncategorizedActive.value;
+    persistUncategorized(uncategorizedActive.value);
+  }
+
+  function clearUncategorized(): void {
+    uncategorizedActive.value = false;
+    persistUncategorized(false);
+  }
+
   function clear(): void {
     activeNames.value = new Set();
     persist(activeNames.value);
+    clearUncategorized();
   }
 
-  return { activeNames, isActive, toggle, clear };
+  return {
+    activeNames,
+    uncategorizedActive,
+    isActive,
+    toggle,
+    toggleUncategorized,
+    clearUncategorized,
+    clear,
+  };
 });

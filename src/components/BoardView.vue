@@ -10,7 +10,7 @@ import { useBoardStore } from '../store/board';
 import { useSearchStore } from '../store/search';
 import { useSettingsStore } from '../store/settings';
 import { useTagFilterStore } from '../store/tagFilter';
-import { itemHasAnyTag } from '../tags/filter';
+import { isUncategorized, passesTagFilter } from '../tags/filter';
 import ConflictBanner from './ConflictBanner.vue';
 import ItemDetailDrawer from './ItemDetailDrawer.vue';
 import ParseErrorBanner from './ParseErrorBanner.vue';
@@ -44,14 +44,50 @@ const effectiveActiveTags = computed(
       [...tagFilterStore.activeNames].filter((name) => boardStore.board.tags.some((t) => t.name === name)),
     ),
 );
-const isTagFilterActive = computed(() => effectiveActiveTags.value.size > 0);
+
+// The "Uncategorized" chip is shown only when it can match something and the filter bar is shown.
+const showUncategorizedChip = computed(
+  () => boardStore.board.tags.length > 0 && allItems(boardStore.board).some(isUncategorized),
+);
+const effectiveUncategorized = computed(
+  () => tagFilterStore.uncategorizedActive && showUncategorizedChip.value,
+);
+const isTagFilterActive = computed(() => effectiveActiveTags.value.size > 0 || effectiveUncategorized.value);
+
+// When the chip disappears, forget that it was active, so that a later untagged item does not
+// filter the board by surprise. Only a board that was loaded without an error is a reliable basis.
+watch(
+  [
+    () => boardStore.loaded,
+    () => boardStore.parseError,
+    () => boardStore.fileNotFound,
+    showUncategorizedChip,
+    () => tagFilterStore.uncategorizedActive,
+  ],
+  () => {
+    if (
+      boardStore.loaded &&
+      boardStore.parseError === null &&
+      !boardStore.fileNotFound &&
+      !showUncategorizedChip.value &&
+      tagFilterStore.uncategorizedActive
+    ) {
+      tagFilterStore.clearUncategorized();
+    }
+  },
+  { immediate: true },
+);
 
 function filterSection<T extends { headline: string; description: string | null; tags: readonly TagName[] }>(
   items: readonly T[],
 ): T[] {
   return items.filter((item) => {
     if (searchStore.isActive && !itemMatches(item, searchStore.term)) return false;
-    if (isTagFilterActive.value && !itemHasAnyTag(item, effectiveActiveTags.value)) return false;
+    if (
+      isTagFilterActive.value &&
+      !passesTagFilter(item, effectiveActiveTags.value, effectiveUncategorized.value)
+    )
+      return false;
     return true;
   });
 }
@@ -189,6 +225,7 @@ function onToggleTag(id: ItemId, tag: TagName): void {
     <TagFilterBar
       v-if="!boardStore.fileNotFound && boardStore.board.tags.length > 0"
       :tags="boardStore.board.tags"
+      :show-uncategorized="showUncategorizedChip"
     />
 
     <main v-if="!boardStore.fileNotFound" class="columns">

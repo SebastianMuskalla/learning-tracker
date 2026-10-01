@@ -1,7 +1,7 @@
 import { err, ok, type Result } from '../domain/result';
 
 /** The format version that this app writes. See "Format versions" in README.md. */
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 5;
 
 export type VersionError =
   | { readonly type: 'NoVersionMarker' }
