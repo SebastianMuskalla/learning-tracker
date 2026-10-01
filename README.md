@@ -265,7 +265,7 @@ pnpm test:e2e        # browser tests against the build; run `pnpm build` first
 ```
 
 `pnpm check` runs all of the above in one go, in this order: `lint:fix`,
-`lint`, `format`, `format:check`, `typecheck`, `test`, `build`, `test:e2e`.
+`lint`, `format`, `format:check`, `typecheck`, `test:coverage`, `build`, `test:e2e`.
 It stops at the first step that fails. Run it before you push. It fixes
 lint and formatting problems in your files, so CI runs the separate
 checks instead.
@@ -273,6 +273,20 @@ checks instead.
 Before the first `pnpm test:e2e`, install the browser once:
 `pnpm exec playwright install chromium`. The browser tests (in `e2e/`)
 replace the GitHub API with a fake, so they need no token and no network.
+
+To run only some unit tests:
+
+```sh
+pnpm exec vitest run tests/domain/merge.test.ts   # one test file
+pnpm exec vitest run -t "name of the test"        # tests whose name matches
+```
+
+The unit tests run without a DOM by default. A test file that needs one
+starts with the line `// @vitest-environment jsdom`.
+
+The parser test fixtures in `tests/format/fixtures/` must keep their exact
+bytes. Prettier skips them on purpose (see `.prettierignore`). Do not
+reformat them.
 
 `pnpm install` also installs a git pre-commit hook (`simple-git-hooks` and
 `lint-staged`). It runs ESLint and Prettier on the staged files.
@@ -372,8 +386,6 @@ To add a new command:
 4. Add tests in `tests/domain/`, `tests/format/`, and, for the UI,
    `tests/components/`.
 5. Call `boardStore.applyAndSync(...)` from the component.
-
-The analysis and plans behind the larger changes are in `doc/`.
 
 ## The `learning.md` file format
 
@@ -527,3 +539,13 @@ tells the other tabs, and they read the new version.
 - If the browser does not let the app use `localStorage` (some private
   modes do this), the app still starts. It keeps the token in memory only
   and tells you; you then enter it again after a reload.
+
+## Future Work
+
+- Data file versioning concept
+- Favicon when used as App
+- Forbid H1 & H2
+- Tags as list
+- Uncategorized functionality
+- Help users write STE in descriptions or check it
+- AI lookup / fact check
