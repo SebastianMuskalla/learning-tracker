@@ -131,6 +131,15 @@ to the old file. If that fails, it stays on the old file and tells you why.
 
 The app now loads your topics and is ready to use.
 
+## Install as an app
+
+Browsers such as Chrome can install the site as an app (PWA). The app then
+opens in its own window with an icon. `public/manifest.webmanifest` sets the
+name and the icons. The icons `public/icon-192.png` and `public/icon-512.png`
+are square versions of `public/favicon.svg` on a white background. They have
+a safe margin, so round or rounded icon masks do not cut the picture. The app
+has no service worker, so it does not work offline.
+
 ## Theme
 
 The app has a light and a dark design. The dark design uses a pure black
@@ -597,7 +606,6 @@ tells the other tabs, and they read the new version.
 
 ## Future Work
 
-- Favicon when used as App
 - Forbid H1 & H2
 - Tags as list
 - Uncategorized functionality
