@@ -1,4 +1,4 @@
-<!-- version:3 -->
+<!-- version:2 -->
 
 # Learning
 
@@ -7,3 +7,5 @@
 ## WIP
 
 ## Complete
+
+## Discarded

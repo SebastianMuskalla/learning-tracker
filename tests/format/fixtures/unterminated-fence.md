@@ -1,4 +1,4 @@
-<!-- version:2 -->
+<!-- version:3 -->
 
 # Learning
 
@@ -8,8 +8,8 @@
 
 ### Never closed
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3NZ created:2026-09-10 -->
-<!-- desc -->
-This description block never ends.
+```markdown
+This description never ends.
 
 ## Complete
 

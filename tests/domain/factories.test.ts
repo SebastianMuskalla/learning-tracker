@@ -44,8 +44,11 @@ describe('makeOptionalDescription', () => {
     expect(result).toEqual({ ok: true, value: 'line one\nline two' });
   });
 
-  it('rejects text containing the reserved end marker', () => {
-    expect(makeOptionalDescription('before <!-- /desc --> after').ok).toBe(false);
+  it('accepts text that looks like a former marker', () => {
+    expect(makeOptionalDescription('before <!-- /desc --> after')).toEqual({
+      ok: true,
+      value: 'before <!-- /desc --> after',
+    });
   });
 });
 

@@ -410,12 +410,12 @@ tagdef      := '<!-- tag:' NAME ' color:#' HEX6 ' -->' NL blank*
 section(S)  := '## ' S NL blank* item*
 item        := '### ' headline NL
                '<!-- ' meta (' ' meta)* ' -->' NL
-               desc?
+               fence?
                blank*
 meta        := 'id:' ULID | 'created:' TIMESTAMP | 'completed:' TIMESTAMP | 'discarded:' TIMESTAMP
              | 'tags:' NAME (',' NAME)*
-desc        := '<!-- desc -->' NL rawline* '<!-- /desc -->' NL
-rawline     := any line that is not exactly '<!-- /desc -->'
+fence       := '`'{N} 'markdown' NL rawline* '`'{N} NL        (N is 3 or more)
+rawline     := any line that does not close the fence
 blank       := an empty line (outside desc blocks)
 ```
 
@@ -425,12 +425,25 @@ Rules for hand edits:
   the app wrote them. Never change the version number.
 - Keep all four sections, in this order: New, WIP, Complete, Discarded.
   Keep every section even when it is empty.
-- Inside a `<!-- desc -->` … `<!-- /desc -->` block, write anything you
-  want. Headings, code fences, other comments, and blank lines are all
-  plain text there. The app only looks for one exact line to end the
-  block: `<!-- /desc -->`.
-- Because of this, a description can never contain the exact text
-  `<!-- /desc -->`. The app blocks this text and explains why.
+- A description is written inside a code fence. The opening line is N
+  backticks and the word `markdown` (N is 3 or more). The closing line is
+  exactly N backticks. Inside, write anything you want: headings, other
+  comments, and blank lines are all plain text. GitHub shows the fence as a
+  code box, so the headings in a description do not change the outline of
+  the file.
+- The tag must be `markdown`. The app does not accept `md` or no tag.
+- The fence must have more backticks than the longest run of backticks at
+  the start of any line in the description (after at most 3 spaces). The
+  app writes the shortest fence that follows this rule. A longer fence that
+  you write by hand is valid, but the next save makes it shorter.
+- The closing line must be exactly N backticks. A line with more backticks,
+  with indentation, or with trailing spaces also closes the fence on
+  GitHub, so the app reports it as an error.
+- If your fence is too short, an inner code fence closes the description
+  too early. The rest of the text then causes a parse error with a line
+  number. Make the outer fence longer to fix it.
+- The old markers `<!-- desc -->` and `<!-- /desc -->` are an error in a
+  version 3 file.
 - Write each headline on a single line. Do not put `<!--` in a headline.
 - A topic's section (New or WIP) depends on whether it has a description.
   If you place a topic under the wrong one by hand, the app still loads it.
@@ -478,15 +491,16 @@ file changed. Then the app reads the file again.
 | Version | Change                                                                                    | First commit on `main` | Last commit on `main` |
 | ------- | ----------------------------------------------------------------------------------------- | ---------------------- | --------------------- |
 | 0       | No version line. Only the empty file. Migrated to 1.                                      | –                      | –                     |
-| 1       | First format. The comment `<!-- learning-tracker: v1 — … -->` below the title marks it.   | `5e6ee92`              | (fill after merge)    |
-| 2       | The line `<!-- version:2 -->` above the title replaces the comment. Nothing else changes. | (fill after merge)     | current               |
+| 1       | First format. The comment `<!-- learning-tracker: v1 — … -->` below the title marks it.   | `5e6ee92`              | `21ba6fe`             |
+| 2       | The line `<!-- version:2 -->` above the title replaces the comment. Nothing else changes. | `66e7eb6`              | (fill after merge)    |
+| 3       | Each description is in a `markdown` code fence. The `<!-- desc -->` markers are removed.  | (fill after merge)     | current               |
 
 "First commit" is the first commit whose app writes this version. Fill in
 the hashes of a new version in a small commit after the merge. This command
 finds the first commit:
 
 ```sh
-git log --reverse --format=%h -S "CURRENT_VERSION = 2" -- src/format/version.ts | head -1
+git log --reverse --format=%h -S "CURRENT_VERSION = <N>" -- src/format/version.ts | head -1
 ```
 
 The last commit of the previous version is the parent of that commit. Inside
@@ -606,7 +620,6 @@ tells the other tabs, and they read the new version.
 
 ## Future Work
 
-- Forbid H1 & H2
 - Tags as list
 - Uncategorized functionality
 - Help users write STE in descriptions or check it

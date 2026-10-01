@@ -1,4 +1,4 @@
-<!-- version:3 -->
+<!-- version:2 -->
 
 # Learning
 
@@ -16,9 +16,9 @@
 
 ### Full timestamps throughout
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3P0 created:2026-09-01T08:00:00Z completed:2026-09-12T17:45:30Z -->
-```markdown
+<!-- desc -->
 Done.
-```
+<!-- /desc -->
 
 ## Discarded
 

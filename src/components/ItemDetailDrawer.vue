@@ -194,7 +194,7 @@ function saveDescription(): void {
   }
   const result = makeOptionalDescription(descriptionDraft.value);
   if (!result.ok) {
-    descError.value = 'That description cannot be stored (it contains the reserved end marker).';
+    descError.value = 'That description cannot be stored.';
     return;
   }
   descError.value = '';

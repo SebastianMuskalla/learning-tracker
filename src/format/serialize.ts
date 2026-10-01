@@ -2,8 +2,8 @@ import type { Board, Item, Section, Tag } from '../domain/types';
 import { CURRENT_VERSION, versionLine } from './version';
 
 export const HEADER_TITLE = '# Learning';
-export const DESC_START = '<!-- desc -->';
-export const DESC_END = '<!-- /desc -->';
+export const FENCE_LANGUAGE = 'markdown';
+const MIN_FENCE_LENGTH = 3;
 
 const SECTION_TITLES: Record<Section, string> = {
   new: 'New',
@@ -37,10 +37,24 @@ export function serialize(board: Board): string {
 function serializeItem(item: Item): readonly string[] {
   const lines: string[] = [`### ${item.headline}`, metaLine(item)];
   if (item.description !== null) {
-    lines.push(DESC_START, ...item.description.split('\n'), DESC_END);
+    const fence = '`'.repeat(fenceLength(item.description));
+    lines.push(`${fence}${FENCE_LANGUAGE}`, ...item.description.split('\n'), fence);
   }
   lines.push('');
   return lines;
+}
+
+/**
+ * The fence is longer than every backtick run at the start of a description line (after at most
+ * 3 spaces). Only such a line can close a fence in CommonMark, so no line can close it early.
+ */
+export function fenceLength(description: string): number {
+  let longest = 0;
+  for (const line of description.split('\n')) {
+    const match = /^ {0,3}(`+)/.exec(line);
+    if (match?.[1] !== undefined) longest = Math.max(longest, match[1].length);
+  }
+  return Math.max(MIN_FENCE_LENGTH, longest + 1);
 }
 
 function metaLine(item: Item): string {

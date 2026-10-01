@@ -1,4 +1,4 @@
-<!-- version:3 -->
+<!-- version:2 -->
 
 # Learning
 
@@ -8,7 +8,7 @@
 
 ### Evil description torture test
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3P2 created:2026-09-10 -->
-`````markdown
+<!-- desc -->
 # Not a header
 ## Also not a header
 ### Definitely not an item
@@ -27,18 +27,7 @@ Trailing whitespace and tabs:
 line with trailing spaces   
 
 Unicode: café, 日本語, emoji 🎉
-
 <!-- /desc -->
-````
-four backticks
-   ```
-indented backticks
-    ```
-code-indented backticks
-~~~
-tilde fence
-~~~
-`````
 
 ## Complete
 

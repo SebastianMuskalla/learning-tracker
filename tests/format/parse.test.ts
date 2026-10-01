@@ -17,11 +17,11 @@ describe('parse — version line', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.line).toBe(1);
-    expect(result.error.reason).toContain('Expected "<!-- version:2 -->"');
+    expect(result.error.reason).toContain('Expected "<!-- version:3 -->"');
   });
 
   it('accepts several blank lines between the version line and the title', () => {
-    const text = fixture('empty.md').replace('<!-- version:2 -->\n\n', '<!-- version:2 -->\n\n\n\n');
+    const text = fixture('empty.md').replace('<!-- version:3 -->\n\n', '<!-- version:3 -->\n\n\n\n');
     expect(parse(text).ok).toBe(true);
   });
 });
@@ -53,7 +53,7 @@ describe('parse — valid files', () => {
     const [item] = result.value.board.wip;
     expect(item?.description).toContain('# Not a header');
     expect(item?.description).toContain('<!-- id:99999999999999999999999999 created:1999-01-01 -->');
-    expect(item?.description).toContain('<!-- desc -->\nThis looks like a start marker');
+    expect(item?.description).toContain('<!-- /desc -->\n````\nfour backticks');
     expect(item?.description).toContain('café, 日本語, emoji 🎉');
   });
 
@@ -99,7 +99,7 @@ describe('parse — valid files', () => {
   it('warns, but does not fail, when an active item sits under the wrong New/WIP heading', () => {
     const text = fixture('empty.md').replace(
       '## New\n',
-      '## New\n\n### Misplaced\n<!-- id:01M2KCX2QA8VMTXY950V44DB2J created:2026-09-15 -->\n<!-- desc -->\nhas a description\n<!-- /desc -->\n',
+      '## New\n\n### Misplaced\n<!-- id:01M2KCX2QA8VMTXY950V44DB2J created:2026-09-15 -->\n```markdown\nhas a description\n```\n',
     );
     const result = parse(text);
     expect(result.ok).toBe(true);
@@ -118,7 +118,10 @@ describe('parse — invalid files', () => {
     ['wrong-section-order.md', 5, 'Expected section heading "## New", found "## WIP"'],
     ['unknown-line.md', 7, 'Expected section heading "## WIP", found "this line is not an item'],
     ['duplicate-id.md', 12, 'Duplicate id "01M2KCX2QA8VMTXY950V44DB2J"'],
-    ['unterminated-desc.md', 18, 'Unterminated description block'],
+    ['unterminated-fence.md', 11, 'Unterminated description (missing the closing fence "```")'],
+    ['wrong-fence-language.md', 11, 'Expected a description fence "```markdown", found "```md"'],
+    ['bad-closing-fence.md', 13, 'The closing fence must be exactly 3 backticks, found "````"'],
+    ['desc-marker-in-v3.md', 11, 'Expected section heading "## Complete", found "<!-- desc -->"'],
     ['complete-without-desc.md', 13, 'A Complete item must have a description'],
     ['complete-without-completed-tag.md', 16, 'Item under Complete is missing the required metadata'],
     ['malformed-meta.md', 8, 'Malformed metadata comment'],
@@ -149,6 +152,32 @@ describe('parse — invalid files', () => {
       expect(result.error.reason).toContain(reason);
     });
   }
+});
+
+describe('parse — fences', () => {
+  it('accepts a hand-written fence that is longer than necessary', () => {
+    const text = fixture('valid.md')
+      .replace('````markdown\n## Notes', '``````markdown\n## Notes')
+      .replace('```\n````\n', '```\n``````\n');
+    const result = parse(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.board.wip[0]?.description).toContain('## Notes');
+  });
+
+  it('reads a fence with only blank lines as no description', () => {
+    const text = fixture('wrong-fence-language.md').replace('```md\ntext\n```', '```markdown\n\n```');
+    const result = parse(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.board.new).toHaveLength(1);
+    expect(result.value.board.wip).toHaveLength(0);
+  });
+
+  it('rejects a closing fence with trailing spaces', () => {
+    const result = parse(fixture('bad-closing-fence.md').replace('````\n', '``` \n'));
+    expect(result).toMatchObject({ ok: false, error: { line: 13 } });
+  });
 });
 
 describe('parse — error messages (E8)', () => {

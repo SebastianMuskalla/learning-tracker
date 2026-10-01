@@ -1,4 +1,4 @@
-<!-- version:3 -->
+<!-- version:2 -->
 
 # Learning
 
@@ -14,22 +14,22 @@
 
 ### Event sourcing
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3NZ created:2026-09-10 -->
-````markdown
+<!-- desc -->
 ## Notes
 Anything goes in here, including `##` headings and fences:
 
 ```ts
 const x: number = 1;
 ```
-````
+<!-- /desc -->
 
 ## Complete
 
 ### TypeScript branded types
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3P0 created:2026-09-01 completed:2026-09-12 -->
-```markdown
+<!-- desc -->
 See https://example.com/branded-types
-```
+<!-- /desc -->
 
 ## Discarded
 

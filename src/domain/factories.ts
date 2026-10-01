@@ -7,7 +7,6 @@ export type ValidationError =
   | { readonly type: 'MultilineHeadline' }
   | { readonly type: 'HeadlineContainsComment' }
   | { readonly type: 'EmptyDescription' }
-  | { readonly type: 'DescriptionContainsEndMarker' }
   | { readonly type: 'InvalidIsoTimestamp'; readonly value: string }
   | { readonly type: 'InvalidItemId'; readonly value: string }
   | { readonly type: 'InvalidTagName'; readonly value: string }
@@ -24,8 +23,6 @@ export function describeValidationError(error: ValidationError): string {
       return 'the headline contains "<!--"';
     case 'EmptyDescription':
       return 'the description is empty';
-    case 'DescriptionContainsEndMarker':
-      return `the description contains the reserved end marker "${DESC_END_MARKER}"`;
     case 'InvalidIsoTimestamp':
       return `"${error.value}" is not a valid timestamp (expected YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DD)`;
     case 'InvalidItemId':
@@ -37,7 +34,6 @@ export function describeValidationError(error: ValidationError): string {
   }
 }
 
-const DESC_END_MARKER = '<!-- /desc -->';
 // Full UTC timestamp, as written by this app from here on: `2026-09-16T14:32:07Z`.
 const ISO_TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
 // Legacy date-only value, as written before timestamps were tracked: `2026-09-16`.
@@ -78,9 +74,6 @@ export function makeHeadline(raw: string): Result<Headline, ValidationError> {
 /** Normalises CRLF to LF and strips leading/trailing blank lines; empty result is a validation error. */
 export function makeDescription(raw: string): Result<Description, ValidationError> {
   const normalised = raw.replace(/\r\n/g, '\n');
-  if (normalised.includes(DESC_END_MARKER)) {
-    return err({ type: 'DescriptionContainsEndMarker' });
-  }
   const stripped = stripBlankEdges(normalised);
   if (stripped.length === 0) {
     return err({ type: 'EmptyDescription' });
@@ -91,9 +84,6 @@ export function makeDescription(raw: string): Result<Description, ValidationErro
 /** Like makeDescription, but an empty result means "no description" rather than an error. */
 export function makeOptionalDescription(raw: string): Result<Description | null, ValidationError> {
   const normalised = raw.replace(/\r\n/g, '\n');
-  if (normalised.includes(DESC_END_MARKER)) {
-    return err({ type: 'DescriptionContainsEndMarker' });
-  }
   const stripped = stripBlankEdges(normalised);
   return ok(stripped.length === 0 ? null : (stripped as Description));
 }

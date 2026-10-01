@@ -126,7 +126,7 @@ test('an empty file is upgraded to the current format', async ({ page }) => {
   await waitUntilSaved(page);
 
   expect(github.putMessages).toHaveLength(1);
-  expect(github.putMessages[0]).toMatch(/^Upgrade learning\.md from format v0 to v2/);
+  expect(github.putMessages[0]).toMatch(/^Upgrade learning\.md from format v0 to v3/);
   expect(github.text).toBe(serialize(emptyBoard()));
 });
 
@@ -157,8 +157,8 @@ test('a version-1 file is upgraded and keeps its items', async ({ page }) => {
   await waitUntilSaved(page);
 
   expect(github.putMessages).toEqual([
-    'Upgrade learning.md from format v1 to v2\n\nv1 → v2: replace the learning-tracker comment with a version line',
+    'Upgrade learning.md from format v1 to v3\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence',
   ]);
-  expect(github.text?.startsWith('<!-- version:2 -->\n\n# Learning\n\n')).toBe(true);
+  expect(github.text?.startsWith('<!-- version:3 -->\n\n# Learning\n\n')).toBe(true);
   expect(headlinesOnGithub(github)).toEqual(['Old topic']);
 });

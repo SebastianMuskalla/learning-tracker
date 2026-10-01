@@ -1,4 +1,4 @@
-<!-- version:2 -->
+<!-- version:3 -->
 
 # Learning
 
@@ -10,8 +10,8 @@
 
 ### Missing the completed: tag
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3P0 created:2026-09-01 -->
-<!-- desc -->
+```markdown
 Has a description but no completed date.
-<!-- /desc -->
+```
 
 ## Discarded

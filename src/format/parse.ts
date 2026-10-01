@@ -22,7 +22,7 @@ import type {
   Tag,
   TagName,
 } from '../domain/types';
-import { DESC_END, DESC_START, HEADER_TITLE } from './serialize';
+import { FENCE_LANGUAGE, HEADER_TITLE } from './serialize';
 import { CURRENT_VERSION, versionLine } from './version';
 
 export interface ParseError {
@@ -414,23 +414,45 @@ function parseItem(
   return ok({ item, warning });
 }
 
+const OPENING_FENCE_RE = new RegExp(`^(\`{3,})${FENCE_LANGUAGE}$`);
+
 function parseOptionalDescription(cursor: Cursor): Result<Description | null, ParseError> {
-  if (cursor.peek() !== DESC_START) {
+  const opening = cursor.peek();
+  if (!opening?.startsWith('`')) {
     return ok(null);
   }
+  const openingLine = cursor.lineNumber;
+  const openingMatch = OPENING_FENCE_RE.exec(opening);
+  if (!openingMatch) {
+    return err({
+      line: openingLine,
+      reason: `Expected a description fence "\`\`\`${FENCE_LANGUAGE}", found ${describeLine(opening)}`,
+    });
+  }
+  const fence = openingMatch[1] ?? '```';
   cursor.advance();
+
+  // Any line that GitHub reads as a closing fence must be exactly the fence, so that the app
+  // and github.com agree where the description ends.
+  const closingRe = new RegExp(`^ {0,3}\`{${String(fence.length)},}[ \\t]*$`);
   const rawLines: string[] = [];
   for (;;) {
     const line = cursor.peek();
     if (line === undefined) {
       return err({
-        line: cursor.lineNumber,
-        reason: `Unterminated description block (missing "${DESC_END}")`,
+        line: openingLine,
+        reason: `Unterminated description (missing the closing fence "${fence}")`,
       });
     }
-    if (line === DESC_END) {
+    if (line === fence) {
       cursor.advance();
       break;
+    }
+    if (closingRe.test(line)) {
+      return err({
+        line: cursor.lineNumber,
+        reason: `The closing fence must be exactly ${String(fence.length)} backticks, found ${describeLine(line)}`,
+      });
     }
     rawLines.push(line);
     cursor.advance();

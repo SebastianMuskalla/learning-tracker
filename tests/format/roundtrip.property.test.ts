@@ -1,4 +1,5 @@
 import fc from 'fast-check';
+import MarkdownIt from 'markdown-it';
 import { describe, expect, it } from 'vitest';
 import { boardsEqual } from '../../src/domain/board';
 import {
@@ -52,6 +53,15 @@ const evilLine: fc.Arbitrary<string> = fc.oneof(
   fc.constant('### Not an item'),
   fc.constant('<!-- id:00000000000000000000000000 created:1999-01-01 -->'),
   fc.constant('<!-- desc -->'),
+  fc.constant('<!-- /desc -->'),
+  fc.constant('```'),
+  fc.constant('````'),
+  fc.constant('`'.repeat(7) + ' x'),
+  fc.constant('   ````'),
+  fc.constant('    ````'),
+  fc.constant('\t```'),
+  fc.constant('```markdown'),
+  fc.constant('~~~'),
   fc.constant('```ts\nconst x: number = 1;\n```'),
   fc.constant(''),
   fc.constant('\t\ttab-indented'),
@@ -63,8 +73,7 @@ const evilLine: fc.Arbitrary<string> = fc.oneof(
 
 const arbitraryDescriptionText: fc.Arbitrary<string> = fc
   .array(evilLine, { minLength: 0, maxLength: 8 })
-  .map((lines) => lines.join('\n'))
-  .filter((text) => !text.includes('<!-- /desc -->'));
+  .map((lines) => lines.join('\n'));
 
 const arbitraryNonEmptyDescription: fc.Arbitrary<Description> = arbitraryDescriptionText
   .map((text) => unwrap(makeOptionalDescription(text.trim().length === 0 ? `x\n${text}` : text)))
@@ -195,6 +204,27 @@ describe('serialize/parse round trip', () => {
           expect(upgrade(serialize(board))).toEqual({ ok: true, value: { kind: 'current' } });
         }),
         { numRuns: 1000 },
+      );
+    },
+    ROUND_TRIP_TIMEOUT_MS,
+  );
+
+  it(
+    'is read by a CommonMark parser as one markdown fence per description and no extra headings',
+    () => {
+      const md = new MarkdownIt();
+      fc.assert(
+        fc.property(arbitraryBoard, (board) => {
+          const items = [...board.new, ...board.wip, ...board.complete, ...board.discarded];
+          const tokens = md.parse(serialize(board), {});
+          const headings = tokens.filter((token) => token.type === 'heading_open');
+          expect(headings).toHaveLength(1 + 4 + items.length);
+          const fences = tokens.filter((token) => token.type === 'fence');
+          const descriptions = items.flatMap((item) => (item.description === null ? [] : [item.description]));
+          expect(fences.map((token) => token.info)).toEqual(descriptions.map(() => 'markdown'));
+          expect(fences.map((token) => token.content)).toEqual(descriptions.map((d) => `${d}\n`));
+        }),
+        { numRuns: 2000 },
       );
     },
     ROUND_TRIP_TIMEOUT_MS,

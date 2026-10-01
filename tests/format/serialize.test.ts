@@ -9,10 +9,10 @@ import {
 } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
 import type { ActiveItem, Board } from '../../src/domain/types';
-import { HEADER_TITLE, serialize } from '../../src/format/serialize';
+import { fenceLength, HEADER_TITLE, serialize } from '../../src/format/serialize';
 import { versionLine } from '../../src/format/version';
 
-const HEADER = `${versionLine(2)}\n\n${HEADER_TITLE}`;
+const HEADER = `${versionLine(3)}\n\n${HEADER_TITLE}`;
 
 describe('serialize', () => {
   it('writes the header and all four section headings for an empty board', () => {
@@ -21,7 +21,7 @@ describe('serialize', () => {
   });
 
   it('starts the file with the version line, then the title', () => {
-    expect(serialize(emptyBoard()).startsWith('<!-- version:2 -->\n\n# Learning\n\n')).toBe(true);
+    expect(serialize(emptyBoard()).startsWith('<!-- version:3 -->\n\n# Learning\n\n')).toBe(true);
   });
 
   it('ends the file with a single trailing newline', () => {
@@ -97,5 +97,20 @@ describe('serialize', () => {
     const text = serialize(board);
     expect(text).toContain(`<!-- id:${tagged.id} created:2026-09-15T14:32:07Z tags:vue,rust -->`);
     expect(text).toContain(`<!-- id:${untagged.id} created:2026-09-15T14:32:07Z -->\n`);
+  });
+});
+
+describe('fenceLength', () => {
+  it.each([
+    ['no backtick line', 'plain text', 3],
+    ['a backtick run of 1 at the start', '`code` here', 3],
+    ['a run of 3', '```ts\ncode\n```', 4],
+    ['runs of 4 and 3', '````\n```', 5],
+    ['3 spaces, then a run of 3', '   ```', 4],
+    ['4 spaces, then a run of 3', '    ```', 3],
+    ['a tab, then a run of 3', '\t```', 3],
+    ['backticks later in a line', 'text ```````', 3],
+  ])('is correct for %s', (_name, description, expected) => {
+    expect(fenceLength(description)).toBe(expected);
   });
 });
