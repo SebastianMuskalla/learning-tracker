@@ -317,12 +317,14 @@ The editor settings in `.vscode/` format on save with Prettier. To make
 `git blame` skip the commit that only reformatted the code, run
 `git config blame.ignoreRevsFile .git-blame-ignore-revs` once.
 
-`.github/workflows/ci.yml` runs the format check, lint, typecheck, the tests
-with coverage, the build, and the browser tests on every push and pull
-request. `.github/workflows/deploy.yml` runs the same checks first, and only
-then builds the app and publishes `dist/` to GitHub Pages on every push to
-`main` (see Step 3 above). Dependabot (`.github/dependabot.yml`) opens
-update pull requests every week.
+`.github/workflows/deploy.yml` is the only workflow. It runs on every push
+to `main`. It runs the format check, lint, typecheck, the tests with
+coverage, the build, and the browser tests. Only when all of them pass, it
+builds the app again with `VITE_BASE` and publishes `dist/` to GitHub Pages
+(see Step 3 above). No workflow runs for a pull request. Thus, a failing check
+stops the deploy, but it does not stop the push. Run `pnpm check` before you
+push. Dependabot (`.github/dependabot.yml`) opens update pull requests every
+week. Their checks run only after you merge them into `main`.
 
 About two dependencies:
 
@@ -330,10 +332,6 @@ About two dependencies:
   support TypeScript 7.
 - **@types/node** stays on the major version that matches the Node version
   in `.nvmrc`.
-
-To make sure that failing checks never reach `main`, protect the branch in
-the app repository's **Settings → Branches**, and require the CI check to
-pass.
 
 **Dev-mode note:** the Content-Security-Policy (CSP) tag in `index.html`
 (see "Security" below) is active in `pnpm dev` too. It blocks two things
