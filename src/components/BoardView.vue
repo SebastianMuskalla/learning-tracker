@@ -293,6 +293,7 @@ function onToggleTag(id: ItemId, tag: TagName): void {
       @restore="onRestore"
       @delete="onDelete"
       @toggle-tag="onToggleTag"
+      @open-item="onSelect"
     />
 
     <ConflictBanner

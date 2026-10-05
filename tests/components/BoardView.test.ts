@@ -11,8 +11,10 @@ import type { Board, ItemId } from '../../src/domain/types';
 import { serialize } from '../../src/format/serialize';
 import * as client from '../../src/github/client';
 import { useBoardStore } from '../../src/store/board';
+import { useSearchStore } from '../../src/store/search';
 import { useSettingsStore } from '../../src/store/settings';
 import { useTagFilterStore } from '../../src/store/tagFilter';
+import { BoardBuilder } from '../links/boardBuilder';
 
 vi.mock('../../src/github/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/github/client')>();
@@ -177,6 +179,32 @@ describe('the Uncategorized chip', () => {
     await flushPromises();
     expect(useBoardStore().fileNotFound).toBe(true);
     expect(store.uncategorizedActive).toBe(true);
+    wrapper.unmount();
+  });
+});
+
+describe('keyword links', () => {
+  it('open a topic that the search hides, and the search term stays', async () => {
+    const builder = new BoardBuilder()
+      .add('OWASP', 'complete', 'The project.')
+      .add('Source', 'wip', 'Read about OWASP.');
+    const { wrapper } = await mountBoard(builder.board);
+    const search = useSearchStore();
+    search.term = 'Source';
+    await flushPromises();
+    expect(headlines(wrapper)).toEqual(['Source']);
+
+    await wrapper
+      .findAll('.card')
+      .find((c) => c.text().includes('Source'))
+      ?.trigger('click');
+    await flushPromises();
+    await wrapper.get('.drawer span.keyword-link').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get<HTMLInputElement>('.drawer input.headline').element.value).toBe('OWASP');
+    expect(search.term).toBe('Source');
+    expect(headlines(wrapper)).toEqual(['Source']);
     wrapper.unmount();
   });
 });

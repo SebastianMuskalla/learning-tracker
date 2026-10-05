@@ -227,6 +227,92 @@ matches the search only further down, or only in a link's target rather
 than its visible text, the card shows a short note that it still matches, so
 you know to open it.
 
+## Keyword links
+
+Many topics explain a term or an acronym, for example "OWASP (Open Worldwide
+Application Security Project)". When a **Complete** topic's headline gives a
+keyword, and this keyword occurs in the description of a different topic, the
+detail view shows the keyword with a dashed underline. You do not keep a
+keyword list by hand: the app gets the keywords from the headlines.
+
+- Move the pointer onto a keyword link (or move to it with **Tab**). A
+  tooltip shows the target's headline and the start of its description.
+- Click the link (or press **Enter** or **Space**). The detail view then shows
+  the target topic. The search and the tag filter do not change, also if
+  they hide the target on the board. On a touch screen, a tap opens the
+  target at once.
+
+Links appear only in the rendered description of the detail view (the
+read-only view and the live preview). They do not appear on the cards, in
+the Markdown text box, in code, or in an existing link. A topic never links
+to itself. Keywords are computed when the app runs. They are not stored in
+`learning.md`.
+
+### How the app gets the keywords from a headline
+
+1. It removes each group in parentheses, with its content (also nested
+   groups). `OWASP (Open Worldwide Application Security Project)` gives
+   `OWASP`.
+2. It cuts the headline at the first colon that has a space after it (or is
+   at the end). `Risk: Risk assessment, Risk handling` gives `Risk`. A colon
+   without a space after it does not cut: `std::vector` stays.
+3. It splits the rest at each `,` and `;`. `CI, CD` gives `CI` and `CD`. A `/`
+   does not split: `CI/CD` is one keyword.
+4. It drops a part that has fewer than 2 characters (spaces are not counted),
+   a part with no letter or digit (`++`), and a part with a parenthesis
+   without a partner (`Foo (bar`).
+5. It drops a part that is the same as an earlier part of the same headline
+   (see "the same keyword" below).
+
+The detail view shows the keywords of the topic below the headline, as
+"Linked as:". This list follows the headline while you type.
+
+### How a keyword matches
+
+- **Case.** A keyword with an upper-case letter inside a word (`OWASP`,
+  `CI/CD`, `GitHub`, `iOS`) matches exactly as written, or in Title case
+  (`Owasp`, `Github`). All other keywords (`Docker`, `Risk assessment`) match
+  in any case.
+- **Short keywords.** A keyword with exactly 2 characters (`AI`, `IT`, `S3`,
+  `C#`, `Go`) matches only exactly as written. So `IT` does not match "It",
+  and `Go` does not match "go".
+- **Spaces and hyphens.** A space or a hyphen in a keyword matches spaces (also
+  a line break), one hyphen, or nothing. So `Risk assessment` matches
+  "risk-assessment" and "RiskAssessment". Other characters, such as the `/` in
+  `CI/CD`, must match exactly.
+- **Plurals.** A keyword also matches with `s` or `es` directly after it, in
+  lower case only: `API` matches "APIs" but not "APIS". `CD` matches "CDs".
+- **Word edges.** A letter or a digit directly before or after the match stops
+  it. Other characters do not: `OWASP` matches "OWASP-based", "OWASP's", and
+  "pre-OWASP-era", but not "OWASPX". `C#` does not match "C#5".
+- **Overlaps.** The longest match wins. For the same length, the match that
+  starts first wins, and then the match without a plural suffix. So with the
+  topics `Risk` and `Risks`, the text "Risks" links to `Risks`.
+
+### The same keyword in two topics
+
+Two keywords are "the same" when they are equal after the app ignores case,
+spaces, and hyphens (`Risk assessment` and `risk-assessment`). If two Complete
+topics give the same keyword, the app links this keyword nowhere. The
+"Linked as:" list of both topics shows the keyword with a warning: "Also used
+by "…" — not linked." A topic that is not Complete shows this warning too,
+so you see the problem before you complete it. Change one of the headlines
+to fix it. `Risk` and `Risks` are not the same.
+
+### Limits
+
+- Only regular plurals match. `Policy` does not match "Policies".
+- A keyword without a space or a hyphen does not match a text with one:
+  `XRay` does not match "X-Ray". Write the keyword as `X-Ray` to match all
+  forms.
+- A keyword does not match across formatting. `Risk assessment` does not
+  match "Risk _assessment_".
+- A headline that is a sentence gives poor keywords. "Why, how and when to use
+  Docker" gives "Why" and "how and when to use Docker". Check the "Linked
+  as:" list and change the headline if necessary.
+- A Complete topic with a common word as its keyword (for example "Risk")
+  links this word in every other description.
+
 ## Tags
 
 A tag is one word (letters, digits, `_`, or `-`) and one of 16 pastel colors.
@@ -357,6 +443,7 @@ this table.
 | `src/composables/`                          | `useSyncLifecycle`: connects the board store to page events (tab hidden, page closing, back online, other tabs).                              |
 | `src/components/`                           | The Vue components.                                                                                                                           |
 | `src/markdown/`, `src/search/`, `src/tags/` | Markdown rendering, search matching and highlighting, tag helpers.                                                                            |
+| `src/links/`                                | Keyword links: get keywords from headlines, find them in a text, and add the links to the rendered description.                               |
 
 Two patterns are used everywhere:
 

@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
-import { sectionOf, type Item, type ItemId, type Section, type Tag, type TagName } from '../domain/types';
+import {
+  allItems,
+  sectionOf,
+  type Item,
+  type ItemId,
+  type Section,
+  type Tag,
+  type TagName,
+} from '../domain/types';
 import { formatTimestamp } from '../format/displayTimestamp';
+import { buildKeywordIndex, keywordStatuses, linkKeywordsFor } from '../links/index';
+import { closestKeywordLink, linkKeywords } from '../links/linkDom';
 import { highlightCodeBlocks, renderMarkdown } from '../markdown/render';
 import { markHits } from '../search/markDom';
 import { useBoardStore } from '../store/board';
 import { useSearchStore } from '../store/search';
+import KeywordTooltip, { type AnchorRect } from './KeywordTooltip.vue';
 import ModalDialog from './ModalDialog.vue';
 import TagChip from './TagChip.vue';
 
@@ -24,6 +35,8 @@ const emit = defineEmits<{
   restore: [id: ItemId];
   delete: [id: ItemId];
   toggleTag: [id: ItemId, tag: TagName];
+  /** A keyword link was clicked. */
+  openItem: [id: ItemId];
 }>();
 
 const SECTION_LABEL: Record<Section, string> = {
@@ -77,15 +90,31 @@ watch(descriptionDirty, (dirty) => {
 
 const renderedHtml = computed(() => renderMarkdown(descriptionDraft.value));
 
+// Keyword links (see README.md, "Keyword links"). The targets come from the stored board; the
+// "Linked as:" row uses the headline draft, so it changes while you type.
+const keywordIndex = computed(() => buildKeywordIndex(boardStore.board));
+const linkTargets = computed(() => linkKeywordsFor(keywordIndex.value, item.id));
+/** Changes only when the links change, so that an unrelated board change does not re-link. */
+const linkSignature = computed(() =>
+  linkTargets.value
+    .map((k) => `${k.targetId}\u0000${k.keyword.text}\u0000${k.targetHeadline}`)
+    .join('\u0001'),
+);
+const ownKeywords = computed(() => keywordStatuses(keywordIndex.value, headlineDraft.value, item.id));
+
+function quoteList(headlines: readonly string[]): string {
+  return headlines.map((headline) => `"${headline}"`).join(', ');
+}
+
 async function refreshHighlights(): Promise<void> {
   await nextTick();
-  if (livePreviewEl.value) {
-    await highlightCodeBlocks(livePreviewEl.value);
-    markHits(livePreviewEl.value, searchStore.term);
-  }
-  if (staticPreviewEl.value) {
-    await highlightCodeBlocks(staticPreviewEl.value);
-    markHits(staticPreviewEl.value, searchStore.term);
+  for (const el of [livePreviewEl.value, staticPreviewEl.value]) {
+    if (el === null) continue;
+    await highlightCodeBlocks(el);
+    // Remove the search marks first, so that a mark does not split a keyword.
+    markHits(el, '');
+    linkKeywords(el, linkTargets.value);
+    markHits(el, searchStore.term);
   }
 }
 
@@ -103,7 +132,7 @@ function scrollFirstMarkIntoView(): void {
 // first, immediate run, `oldTerm`/`oldId` are `undefined`) or the search term itself changes — not
 // on every content edit, which would otherwise yank the scroll position around while typing.
 watch(
-  [renderedHtml, descriptionEditing, () => searchStore.term, () => item.id],
+  [renderedHtml, descriptionEditing, () => searchStore.term, () => item.id, linkSignature],
   async ([, , newTerm, newId], [, , oldTerm, oldId]) => {
     const shouldScroll = newTerm !== oldTerm || newId !== oldId;
     await refreshHighlights();
@@ -118,6 +147,7 @@ watch(
     if (id !== oldId) {
       // Another item was selected. Save the drafts of the previous one first.
       saveDraftsFor(oldId, oldHeadline, oldDescription);
+      hideTooltip();
       headlineDraft.value = headline;
       descriptionDraft.value = description;
       descError.value = '';
@@ -167,6 +197,7 @@ function saveDrafts(): void {
 // Every way of closing the drawer (Escape, the X button, selecting nothing, deleting) unmounts it,
 // so this is the one place that saves the drafts on close.
 onBeforeUnmount(() => {
+  hideTooltip();
   saveDrafts();
   // A `blur` that the browser fires while the elements are removed must not save a second time.
   unmounting = true;
@@ -231,6 +262,83 @@ function confirmDelete(): void {
   emit('delete', item.id);
 }
 
+// The tooltip of a keyword link. It opens after a short delay on hover, and at once on focus.
+const TOOLTIP_DELAY_MS = 300;
+const tooltip = shallowRef<{ readonly link: HTMLElement; readonly anchor: AnchorRect } | null>(null);
+let tooltipTimer: ReturnType<typeof setTimeout> | undefined;
+const tooltipTarget = computed(() =>
+  tooltip.value === null ? null : (targetOf(tooltip.value.link) ?? null),
+);
+
+function targetOf(link: HTMLElement): Item | undefined {
+  const id = link.dataset['targetId'];
+  return allItems(boardStore.board).find((candidate) => candidate.id === id);
+}
+
+function showTooltip(link: HTMLElement): void {
+  clearTimeout(tooltipTimer);
+  const rect = link.getBoundingClientRect();
+  tooltip.value = { link, anchor: { top: rect.top, bottom: rect.bottom, left: rect.left } };
+}
+
+function hideTooltip(): void {
+  clearTimeout(tooltipTimer);
+  tooltip.value = null;
+}
+
+function onPreviewPointerOver(event: PointerEvent): void {
+  const link = closestKeywordLink(event.target);
+  // A touch device has no hover: a tap opens the target at once.
+  if (link === null || event.pointerType === 'touch' || tooltip.value?.link === link) return;
+  clearTimeout(tooltipTimer);
+  tooltipTimer = setTimeout(() => {
+    showTooltip(link);
+  }, TOOLTIP_DELAY_MS);
+}
+
+function onPreviewPointerOut(event: PointerEvent): void {
+  const link = closestKeywordLink(event.target);
+  if (link === null) return;
+  if (event.relatedTarget instanceof Node && link.contains(event.relatedTarget)) return;
+  hideTooltip();
+}
+
+function onPreviewFocusIn(event: FocusEvent): void {
+  const link = closestKeywordLink(event.target);
+  if (link !== null) showTooltip(link);
+}
+
+function onPreviewFocusOut(event: FocusEvent): void {
+  if (closestKeywordLink(event.target) !== null) hideTooltip();
+}
+
+/** Opens the target of a keyword link. Returns false when the event is not on a keyword link. */
+function openKeywordTarget(event: Event): boolean {
+  const link = closestKeywordLink(event.target);
+  if (link === null) return false;
+  // The click must not also switch the read-only view to edit mode.
+  event.stopPropagation();
+  event.preventDefault();
+  const target = targetOf(link);
+  hideTooltip();
+  if (target !== undefined) emit('openItem', target.id);
+  return true;
+}
+
+function onStaticPreviewClick(event: MouseEvent): void {
+  if (openKeywordTarget(event)) return;
+  descriptionEditing.value = true;
+}
+
+/** The app has no URL per topic, so a middle click does the same as a normal click. */
+function onPreviewAuxClick(event: MouseEvent): void {
+  if (event.button === 1) openKeywordTarget(event);
+}
+
+function onPreviewKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Enter' || event.key === ' ') openKeywordTarget(event);
+}
+
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     close();
@@ -242,7 +350,7 @@ function onKeydown(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <aside class="drawer" @keydown="onKeydown">
+  <aside class="drawer" @keydown="onKeydown" @scroll.capture="hideTooltip">
     <div class="drawer-header">
       <span class="status-badge" :class="sectionOf(item)">{{ statusLabel }}</span>
       <input v-model="headlineDraft" class="headline" @blur="saveHeadline" @keyup.enter="saveHeadline" />
@@ -251,6 +359,33 @@ function onKeydown(event: KeyboardEvent): void {
       </button>
     </div>
     <p v-if="headlineError" class="error">{{ headlineError }}</p>
+    <p class="keywords">
+      <template v-if="ownKeywords.length > 0">
+        <span class="keywords-label">Linked as:</span>
+        <span
+          v-for="status in ownKeywords"
+          :key="status.keyword.key"
+          class="keyword-chip"
+          :class="{ collision: status.alsoUsedBy.length > 0 }"
+        >
+          <i
+            v-if="status.alsoUsedBy.length > 0"
+            class="fa-solid fa-triangle-exclamation"
+            aria-hidden="true"
+          ></i>
+          {{ status.keyword.text }}
+          <span v-if="status.alsoUsedBy.length > 0" class="collision-note">
+            Also used by {{ quoteList(status.alsoUsedBy) }} — not linked.
+          </span>
+        </span>
+        <span v-if="item.status !== 'complete'" class="keywords-note">
+          Other topics link here only when this topic is complete.
+        </span>
+      </template>
+      <span v-else class="keywords-note">
+        Not linked: the headline has no keyword with 2 or more characters.
+      </span>
+    </p>
     <p v-if="headlineChangedElsewhere" class="changed-elsewhere">
       This headline changed on GitHub.
       <button type="button" class="ghost" @click="useStoredHeadline">Use theirs</button>
@@ -292,7 +427,13 @@ function onKeydown(event: KeyboardEvent): void {
       ref="staticPreviewEl"
       class="preview preview-static markdown-rich"
       title="Click to edit"
-      @click="descriptionEditing = true"
+      @click="onStaticPreviewClick"
+      @auxclick="onPreviewAuxClick"
+      @keydown="onPreviewKeydown"
+      @pointerover="onPreviewPointerOver"
+      @pointerout="onPreviewPointerOut"
+      @focusin="onPreviewFocusIn"
+      @focusout="onPreviewFocusOut"
       v-html="renderedHtml"
     />
     <!-- eslint-enable vue/no-v-html -->
@@ -304,8 +445,20 @@ function onKeydown(event: KeyboardEvent): void {
           placeholder="Notes, links, code — Markdown supported."
           @blur="saveDescription"
         />
-        <!-- eslint-disable-next-line vue/no-v-html -- renderedHtml is DOMPurify-sanitized in markdown/render.ts -->
-        <div ref="livePreviewEl" class="preview markdown-rich" v-html="renderedHtml" />
+        <!-- eslint-disable vue/no-v-html -- renderedHtml is DOMPurify-sanitized in markdown/render.ts -->
+        <div
+          ref="livePreviewEl"
+          class="preview markdown-rich"
+          @click="openKeywordTarget"
+          @auxclick="onPreviewAuxClick"
+          @keydown="onPreviewKeydown"
+          @pointerover="onPreviewPointerOver"
+          @pointerout="onPreviewPointerOut"
+          @focusin="onPreviewFocusIn"
+          @focusout="onPreviewFocusOut"
+          v-html="renderedHtml"
+        />
+        <!-- eslint-enable vue/no-v-html -->
       </div>
       <div class="desc-actions">
         <button class="primary" @click="saveDescription">
@@ -358,6 +511,8 @@ function onKeydown(event: KeyboardEvent): void {
         </button>
       </div>
     </ModalDialog>
+
+    <KeywordTooltip v-if="tooltip && tooltipTarget" :target="tooltipTarget" :anchor="tooltip.anchor" />
   </aside>
 </template>
 
@@ -421,6 +576,36 @@ function onKeydown(event: KeyboardEvent): void {
   width: 2em;
   height: 2em;
   flex-shrink: 0;
+}
+
+.keywords {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.4rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.keyword-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.05em 0.6em;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.keyword-chip.collision {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.collision-note {
+  color: var(--text);
 }
 
 .dates {

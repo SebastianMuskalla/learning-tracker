@@ -247,3 +247,24 @@ mark.search-hit {
 #app {
   min-height: 100vh;
 }
+
+/* Keyword links between topics (see src/links/linkDom.ts). These live here, not in a component's
+ * scoped styles, because the links are added directly to `v-html` content. They use the text
+ * color, not the link color, with a dashed underline. */
+.keyword-link {
+  color: inherit;
+  text-decoration: underline dashed;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.keyword-link:hover {
+  text-decoration-color: var(--accent);
+}
+
+.keyword-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { emptyBoard } from '../src/domain/board';
 import { applyCommand } from '../src/domain/commands';
-import { makeHeadline, makeHexColor, makeTagName } from '../src/domain/factories';
+import { makeDescription, makeHeadline, makeHexColor, makeTagName } from '../src/domain/factories';
 import { unwrap } from '../src/domain/result';
 import type { Board } from '../src/domain/types';
 import { parse } from '../src/format/parse';
@@ -144,6 +144,41 @@ test('the Uncategorized chip filters untagged items and disappears after tagging
   await page.keyboard.press('Escape');
   await expect(page.locator('.columns').getByText('Tagged')).toBeVisible();
   await expect(page.locator('.columns').getByText('Plain')).toBeVisible();
+});
+
+test('a keyword link shows a tooltip and opens the target', async ({ page }) => {
+  let board = boardWith('OWASP (Open Worldwide Application Security Project)', 'Source');
+  const [target, source] = board.new;
+  if (target === undefined || source === undefined) throw new Error('fixture has no items');
+  const descriptions = new Map([
+    [target.id, 'A list of the top web risks.'],
+    [source.id, 'Read about OWASP first.'],
+  ]);
+  for (const [id, text] of descriptions) {
+    board = unwrap(
+      applyCommand(board, { type: 'setDescription', id, description: unwrap(makeDescription(text)) }),
+    );
+  }
+  board = unwrap(applyCommand(board, { type: 'complete', id: target.id }));
+  const github = new FakeGithub(serialize(board));
+  await github.install(page);
+  await configure(page);
+  await page.goto('./');
+
+  await page.locator('.columns').getByText('Source').click();
+  const link = page.locator('.drawer .keyword-link');
+  await expect(link).toHaveText('OWASP');
+
+  await link.hover();
+  const tooltip = page.getByRole('tooltip');
+  await expect(tooltip).toContainText('OWASP (Open Worldwide Application Security Project)');
+  await expect(tooltip).toContainText('A list of the top web risks.');
+
+  await link.click();
+  await expect(page.locator('.drawer input.headline')).toHaveValue(
+    'OWASP (Open Worldwide Application Security Project)',
+  );
+  await expect(tooltip).toBeHidden();
 });
 
 test('an empty file is upgraded to the current format', async ({ page }) => {
