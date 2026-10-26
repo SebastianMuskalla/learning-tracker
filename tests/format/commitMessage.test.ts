@@ -7,8 +7,9 @@ import {
   makeTagName,
 } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
+import type { Command } from '../../src/domain/commands';
 import type { ActiveItem } from '../../src/domain/types';
-import { commitMessage, migrationMessage } from '../../src/format/commitMessage';
+import { combineMessages, commitMessage, migrationMessage } from '../../src/format/commitMessage';
 
 const CREATED = unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z'));
 
@@ -16,10 +17,41 @@ const item: ActiveItem = {
   id: generateItemId(),
   headline: unwrap(makeHeadline('Learn Vue composables')),
   createdAt: CREATED,
-  status: 'active',
+  statusTemp: 'active',
   description: null,
   tags: [],
 };
+
+describe('commitMessage — items', () => {
+  it.each<[Command, string]>([
+    [{ type: 'add', headline: unwrap(makeHeadline('Docker')) }, 'Add "Docker"'],
+    [
+      { type: 'editHeadline', id: item.id, headline: unwrap(makeHeadline('Nuxt')) },
+      'Rename "Learn Vue composables" → "Nuxt"',
+    ],
+    [{ type: 'setDescription', id: item.id, description: null }, 'Describe "Learn Vue composables"'],
+    [{ type: 'complete', id: item.id }, 'Complete "Learn Vue composables"'],
+    [{ type: 'uncomplete', id: item.id }, 'Reopen "Learn Vue composables"'],
+    [{ type: 'discard', id: item.id }, 'Discard "Learn Vue composables"'],
+    [{ type: 'restore', id: item.id }, 'Restore "Learn Vue composables"'],
+    [{ type: 'reorder', section: 'wip', fromIndex: 0, toIndex: 1 }, 'Reorder WIP'],
+    [{ type: 'delete', id: item.id }, 'Delete "Learn Vue composables"'],
+  ])('%j', (command, expected) => {
+    expect(commitMessage(command, item)).toBe(expected);
+  });
+});
+
+describe('combineMessages', () => {
+  it('keeps the message of a batch of 1', () => {
+    expect(combineMessages(['Complete "Docker"'])).toBe('Complete "Docker"');
+  });
+
+  it('writes a subject and one body line per change for a batch of 2', () => {
+    expect(combineMessages(['Add "A"', 'Complete "B"'])).toBe(
+      'Update learning.md (2 changes)\n\n- Add "A"\n- Complete "B"',
+    );
+  });
+});
 
 describe('commitMessage — tags', () => {
   it('createTag', () => {

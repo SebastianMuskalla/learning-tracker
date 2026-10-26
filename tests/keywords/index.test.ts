@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildKeywordIndex, keywordStatuses, linkKeywordsFor } from '../../src/links/index';
+import { buildKeywordIndex, keywordInfos, linkKeywordsFor } from '../../src/keywords/index';
 import { BoardBuilder } from './boardBuilder';
 
 function linked(builder: BoardBuilder, source: string): string[] {
@@ -9,7 +9,7 @@ function linked(builder: BoardBuilder, source: string): string[] {
 }
 
 describe('linkKeywordsFor', () => {
-  it('links only to Complete topics', () => {
+  it('links only to Complete items', () => {
     const builder = new BoardBuilder()
       .add('OWASP')
       .add('Docker', 'wip')
@@ -19,12 +19,12 @@ describe('linkKeywordsFor', () => {
     expect(linked(builder, 'Source')).toEqual(['OWASP → OWASP']);
   });
 
-  it('does not link a topic to itself', () => {
+  it('does not link an item to itself', () => {
     const builder = new BoardBuilder().add('OWASP').add('XSS, CSRF');
     expect(linked(builder, 'OWASP')).toEqual(['CSRF → XSS, CSRF', 'XSS → XSS, CSRF']);
   });
 
-  it('does not link a keyword that two topics give, also not in their own descriptions', () => {
+  it('does not link a keyword that two items give, also not in their own descriptions', () => {
     const builder = new BoardBuilder()
       .add('Risk assessment')
       .add('risk-Assessment (other)')
@@ -40,28 +40,28 @@ describe('linkKeywordsFor', () => {
   });
 });
 
-describe('keywordStatuses', () => {
-  it('reports the other Complete topics that give the same keyword', () => {
+describe('keywordInfos', () => {
+  it('reports the other Complete items that give the same keyword', () => {
     const builder = new BoardBuilder().add('OWASP (one)').add('owasp (two)').add('Draft', 'wip');
     const index = buildKeywordIndex(builder.board);
-    const statuses = keywordStatuses(index, 'OWASP, XSS', builder.id('Draft'));
-    expect(statuses.map((s) => [s.keyword.text, [...s.alsoUsedBy].sort()])).toEqual([
+    const infos = keywordInfos(index, 'OWASP, XSS', builder.id('Draft'));
+    expect(infos.map((info) => [info.keyword.text, [...info.alsoUsedBy].sort()])).toEqual([
       ['OWASP', ['OWASP (one)', 'owasp (two)']],
       ['XSS', []],
     ]);
   });
 
-  it('does not report the topic itself', () => {
+  it('does not report the item itself', () => {
     const builder = new BoardBuilder().add('OWASP').add('OWASP (again)', 'wip');
     const index = buildKeywordIndex(builder.board);
-    expect(keywordStatuses(index, 'OWASP', builder.id('OWASP'))[0]?.alsoUsedBy).toEqual([]);
-    expect(keywordStatuses(index, 'OWASP (again)', builder.id('OWASP (again)'))[0]?.alsoUsedBy).toEqual([
+    expect(keywordInfos(index, 'OWASP', builder.id('OWASP'))[0]?.alsoUsedBy).toEqual([]);
+    expect(keywordInfos(index, 'OWASP (again)', builder.id('OWASP (again)'))[0]?.alsoUsedBy).toEqual([
       'OWASP',
     ]);
   });
 
   it('is empty for a headline without keywords', () => {
     const builder = new BoardBuilder().add('OWASP');
-    expect(keywordStatuses(buildKeywordIndex(builder.board), '(x)', builder.id('OWASP'))).toEqual([]);
+    expect(keywordInfos(buildKeywordIndex(builder.board), '(x)', builder.id('OWASP'))).toEqual([]);
   });
 });

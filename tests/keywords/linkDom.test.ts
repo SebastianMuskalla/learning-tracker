@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { ItemId } from '../../src/domain/types';
-import { extractKeywords } from '../../src/links/keywords';
-import { closestKeywordLink, linkKeywords } from '../../src/links/linkDom';
-import type { LinkKeyword } from '../../src/links/match';
+import { extractKeywords } from '../../src/keywords/keywords';
+import { closestKeywordLink, linkKeywords } from '../../src/keywords/linkDom';
+import type { LinkKeyword } from '../../src/keywords/match';
 import { markHits } from '../../src/search/markDom';
 
 function targets(...headlines: string[]): LinkKeyword[] {
@@ -52,6 +52,13 @@ describe('linkKeywords', () => {
     linkKeywords(root, targets('OWASP'));
     expect(linkTexts(root)).toEqual(['OWASP']);
     expect(root.querySelector('em span.keyword-link')).not.toBeNull();
+  });
+
+  it('does not match across Markdown formatting', () => {
+    const root = elementWithHtml('<p>Risk <em>assessment</em>, and a Risk assessment.</p>');
+    linkKeywords(root, targets('Risk assessment'));
+    expect(linkTexts(root)).toEqual(['Risk assessment']);
+    expect(root.querySelector('em span.keyword-link')).toBeNull();
   });
 
   it('gives the same DOM when it is called again', () => {

@@ -1,8 +1,8 @@
 import type { Command } from '../domain/commands';
-import type { Item, Section } from '../domain/types';
+import type { Item, Status } from '../domain/types';
 import type { MigrationStep } from './migrations/run';
 
-const SECTION_LABELS: Record<Section, string> = {
+const SECTION_LABELS: Record<Status, string> = {
   new: 'New',
   wip: 'WIP',
   complete: 'Complete',

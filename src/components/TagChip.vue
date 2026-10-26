@@ -6,12 +6,16 @@ const {
   color,
   mode,
   interactive,
+  pressed,
   ink = 'var(--tag-ink)',
 } = defineProps<{
   readonly name: string;
   readonly color: string;
   readonly mode: 'normal' | 'muted' | 'active';
   readonly interactive?: boolean;
+  /** For an interactive chip: the state that a screen reader announces. The caller decides,
+   *  because `normal` means "inactive" in the filter bar and "the item has the tag" in the detail view. */
+  readonly pressed?: boolean;
   /** The text color. The default is the dark ink for the pastel tag colors. */
   readonly ink?: string;
 }>();
@@ -28,7 +32,7 @@ const style = computed(() => ({ '--tag-color': color, '--chip-ink': ink }));
     class="chip"
     :class="mode"
     :style="style"
-    :aria-pressed="mode !== 'muted'"
+    :aria-pressed="pressed"
     @click="$emit('click')"
   >
     <i v-if="mode === 'active'" class="fa-solid fa-check" aria-hidden="true"></i>

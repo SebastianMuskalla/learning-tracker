@@ -7,7 +7,7 @@ interface Entry {
   readonly item: CompleteItem;
 }
 
-/** The keywords of all Complete topics, grouped by comparison key. */
+/** The keywords of all Complete items, grouped by comparison key. */
 export interface KeywordIndex {
   readonly byKey: ReadonlyMap<string, readonly Entry[]>;
 }
@@ -25,8 +25,8 @@ export function buildKeywordIndex(board: Board): KeywordIndex {
 }
 
 /**
- * The keywords that can be linked in the description of the topic `sourceId`. A keyword that two
- * topics give is not linked anywhere. The topic's own keywords are not linked in its description.
+ * The keywords that can be linked in the description of the item `sourceId`. A keyword that two
+ * items give is not linked anywhere. The item's own keywords are not linked in its description.
  */
 export function linkKeywordsFor(index: KeywordIndex, sourceId: ItemId): LinkKeyword[] {
   const result: LinkKeyword[] = [];
@@ -38,14 +38,14 @@ export function linkKeywordsFor(index: KeywordIndex, sourceId: ItemId): LinkKeyw
   return result;
 }
 
-export interface KeywordStatus {
+export interface KeywordInfo {
   readonly keyword: Keyword;
-  /** The headlines of the other Complete topics that give the same keyword. */
+  /** The headlines of the other Complete items that give the same keyword. */
   readonly alsoUsedBy: readonly string[];
 }
 
-/** The keywords of a (draft) headline of the topic `itemId`, each with its collisions. */
-export function keywordStatuses(index: KeywordIndex, headline: string, itemId: ItemId): KeywordStatus[] {
+/** The keywords of a (draft) headline of the item `itemId`, each with its collisions. */
+export function keywordInfos(index: KeywordIndex, headline: string, itemId: ItemId): KeywordInfo[] {
   return extractKeywords(headline).map((keyword) => ({
     keyword,
     alsoUsedBy: (index.byKey.get(keyword.key) ?? [])

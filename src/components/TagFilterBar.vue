@@ -22,6 +22,7 @@ const tagFilterStore = useTagFilterStore();
       :color="tag.color"
       :mode="tagFilterStore.activeNames.has(tag.name) ? 'active' : 'normal'"
       interactive
+      :pressed="tagFilterStore.activeNames.has(tag.name)"
       @click="tagFilterStore.toggle(tag.name)"
     />
     <TagChip
@@ -32,6 +33,7 @@ const tagFilterStore = useTagFilterStore();
       ink="var(--uncategorized-ink)"
       :mode="tagFilterStore.uncategorizedActive ? 'active' : 'normal'"
       interactive
+      :pressed="tagFilterStore.uncategorizedActive"
       @click="tagFilterStore.toggleUncategorized()"
     />
   </div>

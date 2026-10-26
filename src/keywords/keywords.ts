@@ -1,5 +1,5 @@
 /**
- * How a keyword matches the case of the text (see README.md, "Keyword links"):
+ * How a keyword matches the case of the text (see the "Case matching" requirements in openspec/specs/keywords/spec.md):
  * - `any`: any case.
  * - `acronym`: exactly as written, or in Title case.
  * - `exact`: only exactly as written (keywords with exactly 2 characters).

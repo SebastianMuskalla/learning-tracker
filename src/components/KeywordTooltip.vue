@@ -48,7 +48,7 @@ watch(() => [anchor, target.id, descriptionHtml.value], place, { immediate: true
       role="tooltip"
       :style="{ top: `${position.top}px`, left: `${position.left}px` }"
     >
-      <strong class="title">{{ target.headline }}</strong>
+      <strong class="headline">{{ target.headline }}</strong>
       <!-- eslint-disable-next-line vue/no-v-html -- renderMarkdown output is DOMPurify-sanitized -->
       <div class="body markdown-rich" v-html="descriptionHtml" />
     </div>
@@ -72,7 +72,7 @@ watch(() => [anchor, target.id, descriptionHtml.value], place, { immediate: true
   overflow-wrap: anywhere;
 }
 
-.title {
+.headline {
   display: block;
   margin-bottom: 0.3rem;
 }

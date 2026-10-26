@@ -4,8 +4,8 @@ import { boardsEqual, emptyBoard } from '../domain/board';
 import type { Command, DomainError } from '../domain/commands';
 import { applyCommand } from '../domain/commands';
 import { generateItemId, nowTimestamp } from '../domain/factories';
-import { merge } from '../domain/merge';
-import { findItemById, type Board, type IsoTimestamp, type ItemId } from '../domain/types';
+import { merge, mergeChoosing, type MergeConflict, type MergeResult } from '../domain/merge';
+import { findItemById, type Board, type IsoTimestamp, type ItemId, type Status } from '../domain/types';
 import {
   combineMessages,
   commitMessage,
@@ -50,18 +50,93 @@ interface PendingCommand {
 }
 
 export interface ConflictState {
+  /** The common ancestor of `local` and `remote`. `resolveConflict` merges again from it. */
+  readonly base: Board;
   readonly local: Board;
   readonly remote: Board;
-  /** The sha and text of `remote`. `resolveConflict` uses these, not the store's `sha`. */
-  readonly sha: string;
-  readonly baseText: string;
-  readonly message: string;
-  /** The commands that make up `local`. */
+  /** The items and tags that changed differently in `local` and `remote`. */
+  readonly conflicts: readonly MergeConflict[];
+  /** The commands that make up `local`. The commit message is built from them. */
   readonly commands: readonly PendingCommand[];
 }
 
 function commandItemId(command: Command): ItemId | undefined {
   return command.type !== 'add' && 'id' in command ? command.id : undefined;
+}
+
+/**
+ * True if the merge lost the change of `command`: the command changes an item or a tag that the
+ * merge dropped, because the other side deleted it, or the command reorders a section in
+ * `lostReorders`. A command that removes something is never lost.
+ */
+function lostInMerge(command: Command, merged: Board, lostReorders: ReadonlySet<Status>): boolean {
+  const hasItem = (id: ItemId): boolean => findItemById(merged, id) !== undefined;
+  const hasTag = (name: string): boolean =>
+    merged.tags.some((tag) => tag.name.toLowerCase() === name.toLowerCase());
+  switch (command.type) {
+    case 'delete':
+    case 'deleteTag':
+      return false;
+    case 'reorder':
+      return lostReorders.has(command.section);
+    case 'add':
+      return command.id !== undefined && !hasItem(command.id);
+    case 'createTag':
+    case 'setTagColor':
+      return !hasTag(command.name);
+    case 'tagItem':
+      return !hasItem(command.id) || !hasTag(command.tag);
+    case 'editHeadline':
+    case 'setDescription':
+    case 'complete':
+    case 'uncomplete':
+    case 'discard':
+    case 'restore':
+    case 'untagItem':
+      return !hasItem(command.id);
+  }
+}
+
+/**
+ * Removes the commands whose change the merge lost (see `lostInMerge`). Also returns the number of
+ * lost reorders, which the merge does not count in `droppedLocalChanges`.
+ */
+function withoutLostCommands(
+  commands: readonly PendingCommand[],
+  merged: MergeResult,
+): { kept: readonly PendingCommand[]; droppedReorders: number } {
+  const lost = (pending: PendingCommand): boolean =>
+    lostInMerge(pending.command, merged.board, merged.lostLocalReorders);
+  return {
+    kept: commands.filter((pending) => !lost(pending)),
+    droppedReorders: commands.filter((pending) => pending.command.type === 'reorder' && lost(pending)).length,
+  };
+}
+
+/** True if the two conflicts name the same item or the same tag. */
+function sameConflict(a: MergeConflict, b: MergeConflict): boolean {
+  if (a.type === 'DivergentEdit' && b.type === 'DivergentEdit') return a.id === b.id;
+  if (a.type === 'DivergentTagEdit' && b.type === 'DivergentTagEdit') {
+    return a.name.toLowerCase() === b.name.toLowerCase();
+  }
+  return false;
+}
+
+const CONFLICT_MESSAGE = 'learning.md changed in two places. Choose which version to keep.';
+
+/** True if `command` changes one of the items or tags in `conflicts`. */
+function changesConflict(command: Command, conflicts: readonly MergeConflict[]): boolean {
+  const itemId = command.type === 'add' ? command.id : commandItemId(command);
+  const tagName =
+    command.type === 'createTag' || command.type === 'setTagColor' ? command.name.toLowerCase() : undefined;
+  return conflicts.some((conflict) => {
+    switch (conflict.type) {
+      case 'DivergentEdit':
+        return itemId === conflict.id;
+      case 'DivergentTagEdit':
+        return tagName === conflict.name.toLowerCase();
+    }
+  });
 }
 
 function sleep(ms: number): Promise<void> {
@@ -161,8 +236,10 @@ function formatClockTime(date: Date): string {
  * The state that is shown (`board`) is always `confirmedBoard` (what GitHub has at `sha`) plus the
  * in-flight commands plus the pending commands. Whenever `confirmedBoard` changes, the local
  * commands are applied again on top of it (`rebaseLocal`), so a change made while a request is
- * in flight is never overwritten by the request's result.
- * See doc/requirement-1-concurrency.md for the write path.
+ * in flight is never overwritten by the request's result. If the new `confirmedBoard` contains a
+ * change from GitHub, a 3-way merge first checks the local commands against that change, and a
+ * conflict opens the conflict dialog (see `reconcileConflict`, `adoptRemote`, `resolveConflict`).
+ * See "The write path" in the Architecture section of CLAUDE.md.
  */
 export const useBoardStore = defineStore('board', () => {
   const settings = useSettingsStore();
@@ -211,7 +288,7 @@ export const useBoardStore = defineStore('board', () => {
   let queue: Promise<void> = Promise.resolve();
 
   // The pending commands are written as one batch (one commit) once things go quiet.
-  // See doc/requirement-1-concurrency.md, phase 2.
+  // See "Batched commits" and "Save timing" in openspec/specs/sync/spec.md.
   let pendingQuietTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingCapTimer: ReturnType<typeof setTimeout> | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -251,8 +328,9 @@ export const useBoardStore = defineStore('board', () => {
   }
 
   /** Shows `onto` plus the pending commands. A command that no longer applies (for example, its
-   *  item was deleted on GitHub) is dropped, and the user gets a notice. */
-  function rebaseLocal(onto: Board): void {
+   *  item was deleted on GitHub) is dropped, and the user gets a notice. `droppedByMerge` counts
+   *  the local changes that a merge already dropped to build `onto`; they go into the same notice. */
+  function rebaseLocal(onto: Board, droppedByMerge = 0): void {
     let next = onto;
     const kept: PendingCommand[] = [];
     for (const pending of pendingCommands.value) {
@@ -262,9 +340,10 @@ export const useBoardStore = defineStore('board', () => {
         kept.push(pending);
       }
     }
-    const dropped = pendingCommands.value.length - kept.length;
+    const droppedCommands = pendingCommands.value.length - kept.length;
+    if (droppedCommands > 0) pendingCommands.value = kept;
+    const dropped = droppedCommands + droppedByMerge;
     if (dropped > 0) {
-      pendingCommands.value = kept;
       notice.value =
         dropped === 1
           ? 'One change no longer fit the newest version of learning.md and was dropped.'
@@ -303,6 +382,10 @@ export const useBoardStore = defineStore('board', () => {
     return enqueue(async () => {
       await flushPending();
       if (conflict.value !== null) return;
+      // The save failed and kept its commands. A read now would put them on a newer file without
+      // a merge. The retry of the save gets a 409 and merges instead. A read is still needed to
+      // find a hand fix of the file, and to load the file for the first time.
+      if (pendingCommands.value.length > 0 && loaded.value && canWrite.value && !fileNotFound.value) return;
       await performLoad();
     });
   }
@@ -369,8 +452,39 @@ export const useBoardStore = defineStore('board', () => {
       await writeMigration(read, file.sha, attempt);
       return;
     }
-    confirm(read.board, file.sha, file.text);
-    rebaseLocal(read.board);
+    adoptRemote(read.board, file.sha, file.text);
+  }
+
+  /**
+   * Makes a board that was read from GitHub the confirmed board, and applies the pending commands
+   * again on top of it. Before that, a merge checks the pending commands against the change from
+   * GitHub, and a conflict opens the conflict dialog. Before the first load the check is skipped:
+   * the commands then only add to the empty board.
+   * See "Conflict check before unsaved changes are applied again" in openspec/specs/sync/spec.md.
+   */
+  function adoptRemote(remoteBoard: Board, newSha: string, text: string): void {
+    let droppedByMerge = 0;
+    if (loaded.value && pendingCommands.value.length > 0) {
+      const checked = merge(confirmedBoard, board.value, remoteBoard);
+      if (!checked.ok) {
+        conflict.value = {
+          base: confirmedBoard,
+          local: board.value,
+          remote: remoteBoard,
+          conflicts: checked.error,
+          commands: pendingCommands.value,
+        };
+        pendingCommands.value = [];
+        rebaseLocal(confirmedBoard);
+        setStatus('conflict', CONFLICT_MESSAGE);
+        return;
+      }
+      const { kept, droppedReorders } = withoutLostCommands(pendingCommands.value, checked.value);
+      pendingCommands.value = kept;
+      droppedByMerge = checked.value.droppedLocalChanges + droppedReorders;
+    }
+    confirm(remoteBoard, newSha, text);
+    rebaseLocal(remoteBoard, droppedByMerge);
     settle();
   }
 
@@ -389,9 +503,7 @@ export const useBoardStore = defineStore('board', () => {
 
     if (result.ok) {
       retryCount = 0;
-      confirm(read.board, result.value.sha, read.text);
-      rebaseLocal(read.board);
-      settle();
+      adoptRemote(read.board, result.value.sha, read.text);
       return;
     }
 
@@ -448,6 +560,10 @@ export const useBoardStore = defineStore('board', () => {
   function applyAndSync(command: Command): void {
     if (!canWrite.value) {
       setStatus('error', 'Cannot write: learning.md failed to parse. Fix it on GitHub first.');
+      return;
+    }
+    if (fileNotFound.value) {
+      setStatus('error', 'learning.md does not exist yet. Click "Create it" first.');
       return;
     }
 
@@ -531,9 +647,10 @@ export const useBoardStore = defineStore('board', () => {
   async function flushPending(): Promise<void> {
     clearPendingTimers();
     if (pendingCommands.value.length === 0) return;
-    // Held back until the file is loaded, the user resolves the conflict, or the file is fixed.
-    // `settle` (after the next load or the conflict choice) schedules the flush again.
-    if (!loaded.value || conflict.value !== null || !canWrite.value) return;
+    // Held back until the file is loaded, the user resolves the conflict, the file is fixed, or the
+    // user creates the missing file ("Create it"). `settle` (after the next load, the conflict
+    // choice, or the create) schedules the flush again.
+    if (!loaded.value || conflict.value !== null || !canWrite.value || fileNotFound.value) return;
     cancelRetry();
 
     const commands = pendingCommands.value;
@@ -548,12 +665,19 @@ export const useBoardStore = defineStore('board', () => {
    * Best-effort write for when the page is going away (`pagehide`) and there is no time left for
    * the queue, retries, or a merge. It does not change any state: if the page comes back from the
    * back/forward cache, the normal flush runs as if nothing happened (and detects a write that
-   * landed through the 409 path). See doc/requirement-1-concurrency.md, phase 4.
+   * landed through the 409 path). See "Save on close" in openspec/specs/sync/spec.md.
    */
   function flushBeforeUnload(): void {
     const unsent = [...inFlightCommands.value, ...pendingCommands.value];
     if (unsent.length === 0) return;
-    if (!loaded.value || conflict.value !== null || !canWrite.value || settings.token === null) return;
+    if (
+      !loaded.value ||
+      conflict.value !== null ||
+      !canWrite.value ||
+      fileNotFound.value ||
+      settings.token === null
+    )
+      return;
 
     const text = serialize(board.value);
     if (!roundTrips(text, board.value)) return;
@@ -676,14 +800,15 @@ export const useBoardStore = defineStore('board', () => {
    * Called after a 409/422. Reads the file once, then decides:
    *  - the remote text already equals what we tried to write → our write landed (or the sha was
    *    merely stale from an eventually-consistent read) — adopt it, done;
-   *  - otherwise, 3-way merge `baseBoard` (base), `intendedBoard` (ours) and the fresh remote
-   *    board. A stale-sha-only conflict merges trivially back to `intendedBoard`. A real but
+   *  - otherwise, 3-way merge `baseBoard` (base), `intendedBoard` plus the commands made while the
+   *    write was in flight (ours) and the fresh remote board. Those commands join the batch. A
+   *    stale-sha-only conflict merges trivially back to ours. A real but
    *    mergeable divergence merges the two changes. Either way, retry the (possibly merged)
    *    write with backoff, up to the attempt cap.
    *  - only an unmergeable, genuinely divergent edit on the same item surfaces the conflict dialog.
    */
   async function reconcileConflict(input: SyncAttemptInput): Promise<void> {
-    const { text: attemptedText, message, intendedBoard, baseBoard, attempt } = input;
+    const { text: attemptedText, intendedBoard, baseBoard, attempt } = input;
 
     const fresh = await getFile(config());
     if (!fresh.ok) {
@@ -697,52 +822,51 @@ export const useBoardStore = defineStore('board', () => {
     }
 
     const freshRead = readRemote(fresh.value.text);
-    if (freshRead.kind === 'failed') {
-      // Writes stay blocked until the file is fixed (or the app is reloaded, if the file is newer).
-      // The work is kept for the next load.
-      keepUnsent();
-      parseError.value = freshRead.error;
-      parseErrorTooNew.value = freshRead.tooNew;
-      setStatus('error');
-      return;
-    }
-    if (freshRead.kind === 'migrate') {
-      // The file is older than this app (someone reverted it). Upgrade it first; the work is
-      // kept and written afterwards.
-      keepUnsent();
-      await writeMigration(freshRead, fresh.value.sha, 0);
+    if (freshRead.kind !== 'ready') {
+      await keepUnsentForUnreadyFile(freshRead, fresh.value.sha);
       return;
     }
     const freshBoard = freshRead.board;
 
-    const merged = merge(baseBoard, intendedBoard, freshBoard);
+    // The commands made while this save was in flight build on `intendedBoard`. They join the
+    // batch, so that the merge also checks them against the change from GitHub. Applied again
+    // without the check, they would replace that change.
+    if (pendingCommands.value.length > 0) {
+      inFlightCommands.value = [...inFlightCommands.value, ...pendingCommands.value];
+      pendingCommands.value = [];
+    }
+    // No request runs now, so `board` is `intendedBoard` plus the commands that just joined.
+    const localBoard = board.value;
+
+    const merged = merge(baseBoard, localBoard, freshBoard);
     if (!merged.ok) {
       conflict.value = {
-        local: intendedBoard,
+        base: baseBoard,
+        local: localBoard,
         remote: freshBoard,
-        sha: fresh.value.sha,
-        baseText: fresh.value.text,
-        message,
+        conflicts: merged.error,
         commands: inFlightCommands.value,
       };
       inFlightCommands.value = [];
       // Show the last confirmed state (plus newer local commands) while the dialog is open.
       rebaseLocal(confirmedBoard);
-      setStatus('conflict', 'learning.md changed in two places. Choose which version to keep.');
+      setStatus('conflict', CONFLICT_MESSAGE);
       return;
     }
 
-    confirm(freshBoard, fresh.value.sha, fresh.value.text);
-
     if (attempt >= MAX_SYNC_ATTEMPTS - 1) {
+      // Keep the old confirmed board and sha: the retry then gets a 409 again and merges again.
       keepUnsent();
       setStatus('error', 'Could not save after several attempts. Not saved — will retry.');
       scheduleRetry();
       return;
     }
 
-    const mergedText = serialize(merged.value);
-    if (!roundTrips(mergedText, merged.value)) {
+    confirm(freshBoard, fresh.value.sha, fresh.value.text);
+
+    const mergedBoard = merged.value.board;
+    const mergedText = serialize(mergedBoard);
+    if (!roundTrips(mergedText, mergedBoard)) {
       dropInFlight();
       setStatus(
         'error',
@@ -751,37 +875,139 @@ export const useBoardStore = defineStore('board', () => {
       return;
     }
 
-    rebaseLocal(merged.value);
+    const { message: mergedMessage, droppedReorders } = keepCommandsOf(merged.value);
+    rebaseLocal(mergedBoard, merged.value.droppedLocalChanges + droppedReorders);
+    if (mergedText === fresh.value.text) {
+      // GitHub already has the merged result, for example because the merge lost each local
+      // change. A request would create an empty commit.
+      finishWrite(mergedBoard, fresh.value.sha, mergedText);
+      return;
+    }
     await sleep(backoffDelayMs(attempt));
     await syncAttempt({
       text: mergedText,
       sha: fresh.value.sha,
-      message,
-      intendedBoard: merged.value,
+      message: mergedMessage,
+      intendedBoard: mergedBoard,
       baseBoard: freshBoard,
       attempt: attempt + 1,
     });
   }
 
-  /** Resolves an unmergeable conflict by discarding one side. */
+  /**
+   * A write found a file that cannot be merged now: it does not parse, or it has an older format.
+   * The in-flight work is kept for later.
+   */
+  async function keepUnsentForUnreadyFile(
+    read: Exclude<RemoteRead, { kind: 'ready' }>,
+    readSha: string,
+  ): Promise<void> {
+    keepUnsent();
+    if (read.kind === 'failed') {
+      // Writes stay blocked until the file is fixed (or the app is reloaded, if the file is newer).
+      parseError.value = read.error;
+      parseErrorTooNew.value = read.tooNew;
+      setStatus('error');
+      return;
+    }
+    // The file is older than this app (someone reverted it). Upgrade it first; the work is
+    // written afterwards.
+    await writeMigration(read, readSha, 0);
+  }
+
+  /**
+   * Resolves an unmergeable conflict: each conflicting item and tag takes the chosen side's
+   * version. The changes without a conflict are kept from both sides.
+   */
   function resolveConflict(choice: 'keepMine' | 'keepTheirs'): Promise<void> {
     return enqueue(async () => {
       const current = conflict.value;
       if (!current) return;
       conflict.value = null;
+      // Keep GitHub's version discards the local commands on the conflicting items and tags: the
+      // commit message does not name them, and a retry after a failed write does not apply them.
+      const commands =
+        choice === 'keepTheirs'
+          ? current.commands.filter((pending) => !changesConflict(pending.command, current.conflicts))
+          : current.commands;
+      inFlightCommands.value = commands;
 
-      if (choice === 'keepTheirs') {
-        // Read the file again instead of trusting `current.remote`: it may have changed again
-        // since the conflict was raised. Newer local commands are applied on top of it.
-        await performLoad();
+      // Read the file again instead of trusting `current.remote`: it may have changed again
+      // since the conflict was raised.
+      setStatus('loading');
+      const fresh = await getFile(config());
+      if (!fresh.ok) {
+        writeFailed(fresh.error);
+        return;
+      }
+      const freshRead = readRemote(fresh.value.text);
+      if (freshRead.kind !== 'ready') {
+        await keepUnsentForUnreadyFile(freshRead, fresh.value.sha);
         return;
       }
 
-      confirm(current.remote, current.sha, current.baseText);
-      inFlightCommands.value = current.commands;
-      rebaseLocal(current.local);
-      await writeBoard(current.local, current.message);
+      // The commands made while the dialog was open were applied on the old confirmed board. They
+      // join the local side of the choice, and a merge without a chosen side checks them. A
+      // conflict that the dialog did not show (also a newer change on GitHub) opens the dialog again.
+      let local = current.local;
+      const held: PendingCommand[] = [];
+      for (const pending of pendingCommands.value) {
+        const applied = applyCommand(local, pending.command, pending.at);
+        if (applied.ok) {
+          local = applied.value;
+          held.push(pending);
+        }
+      }
+      const droppedHeld = pendingCommands.value.length - held.length;
+      pendingCommands.value = [];
+      const checked = merge(current.base, local, freshRead.board);
+      const unseen = checked.ok
+        ? []
+        : checked.error.filter((found) => !current.conflicts.some((shown) => sameConflict(found, shown)));
+      if (!checked.ok && unseen.length > 0) {
+        conflict.value = {
+          base: current.base,
+          local,
+          remote: freshRead.board,
+          conflicts: checked.error,
+          commands: [...current.commands, ...held],
+        };
+        inFlightCommands.value = [];
+        rebaseLocal(confirmedBoard, droppedHeld);
+        setStatus('conflict', CONFLICT_MESSAGE);
+        return;
+      }
+      inFlightCommands.value = [
+        ...commands,
+        ...(choice === 'keepTheirs'
+          ? held.filter((pending) => !changesConflict(pending.command, current.conflicts))
+          : held),
+      ];
+
+      const merged = mergeChoosing(
+        current.base,
+        local,
+        freshRead.board,
+        choice === 'keepMine' ? 'local' : 'remote',
+      );
+      confirm(freshRead.board, fresh.value.sha, fresh.value.text);
+      const { message, droppedReorders } = keepCommandsOf(merged);
+      rebaseLocal(merged.board, merged.droppedLocalChanges + droppedReorders + droppedHeld);
+      // A merge that equals the file on GitHub sends no request (see `writeBoard`).
+      await writeBoard(merged.board, message);
     });
+  }
+
+  /**
+   * Removes the in-flight commands whose change the merge lost (see `lostInMerge`). Returns the
+   * commit message of the commands that remain, and the number of lost reorders, which the merge
+   * does not count in `droppedLocalChanges`. A removed command is not applied again by a retry
+   * after a failed write.
+   */
+  function keepCommandsOf(merged: MergeResult): { message: string; droppedReorders: number } {
+    const { kept, droppedReorders } = withoutLostCommands(inFlightCommands.value, merged);
+    inFlightCommands.value = kept;
+    return { message: combineMessages(kept.map((pending) => pending.message)), droppedReorders };
   }
 
   /** Marks an editor draft as changed but not yet applied, or clears the mark. */

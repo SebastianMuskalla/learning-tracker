@@ -51,6 +51,35 @@ describe('renderMarkdown code blocks', () => {
   });
 });
 
+describe('renderMarkdown safety', () => {
+  it('shows raw HTML as text', () => {
+    const root = rendered('<b>bold</b>');
+    expect(root.querySelector('b')).toBeNull();
+    expect(root.textContent).toContain('<b>bold</b>');
+  });
+
+  it('does not create a script element', () => {
+    const root = rendered('<script>alert(1)</script>\n\n[x](javascript:alert(1))');
+    expect(root.querySelector('script')).toBeNull();
+    expect(root.querySelector('a[href^="javascript:"]')).toBeNull();
+  });
+
+  it('opens each link in a new tab without access to the app page', () => {
+    const root = rendered('[Docs](https://example.com) and https://example.org');
+    const links = [...root.querySelectorAll('a')];
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    }
+  });
+
+  it('shows an image from an HTTPS host', () => {
+    const root = rendered('![Diagram](https://example.com/diagram.png)');
+    expect(root.querySelector('img')?.getAttribute('src')).toBe('https://example.com/diagram.png');
+  });
+});
+
 describe('displayLanguageName', () => {
   it('maps common tags and aliases, ignoring case', () => {
     expect(displayLanguageName('js')).toBe('JavaScript');

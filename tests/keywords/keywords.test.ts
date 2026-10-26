@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { comparisonKey, extractKeywords, titleCase } from '../../src/links/keywords';
+import { comparisonKey, extractKeywords, titleCase } from '../../src/keywords/keywords';
 
 function texts(headline: string): string[] {
   return extractKeywords(headline).map((keyword) => keyword.text);

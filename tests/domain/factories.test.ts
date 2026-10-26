@@ -168,4 +168,10 @@ describe('item ids', () => {
   it('rejects malformed ids', () => {
     expect(makeItemId('not-a-ulid').ok).toBe(false);
   });
+
+  it('rejects an id with a lower-case letter', () => {
+    expect(makeItemId('01m3vxeyy3v9m2bmammk12gmbs').ok).toBe(false);
+    expect(makeItemId('01M3VXEYY3V9M2BMAMMK12GMBs').ok).toBe(false);
+    expect(makeItemId('01M3VXEYY3V9M2BMAMMK12GMBS').ok).toBe(true);
+  });
 });

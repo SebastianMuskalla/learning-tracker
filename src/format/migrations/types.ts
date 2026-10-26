@@ -9,7 +9,7 @@ export interface MigrationError {
 /**
  * A pure text-to-text step from format version `from` to `from + 1`.
  * A released migration never changes. It must not import the parser, the serializer, or the
- * version module: those change with later versions. See "To add a format version" in README.md.
+ * version module: those change with later versions. See "Add a format version" in CLAUDE.md.
  */
 export interface Migration {
   readonly from: number;

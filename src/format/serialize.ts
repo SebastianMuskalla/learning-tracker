@@ -1,18 +1,18 @@
-import type { Board, Item, Section, Tag } from '../domain/types';
+import type { Board, Item, Status, Tag } from '../domain/types';
 import { CURRENT_VERSION, versionLine } from './version';
 
 export const HEADER_TITLE = '# Learning';
 export const FENCE_LANGUAGE = 'markdown';
 const MIN_FENCE_LENGTH = 3;
 
-const SECTION_TITLES: Record<Section, string> = {
+const SECTION_TITLES: Record<Status, string> = {
   new: 'New',
   wip: 'WIP',
   complete: 'Complete',
   discarded: 'Discarded',
 };
 
-const SECTION_ORDER: readonly Section[] = ['new', 'wip', 'complete', 'discarded'];
+const SECTION_ORDER: readonly Status[] = ['new', 'wip', 'complete', 'discarded'];
 
 export function serialize(board: Board): string {
   const lines: string[] = [versionLine(CURRENT_VERSION), '', HEADER_TITLE, ''];
@@ -59,10 +59,10 @@ export function fenceLength(description: string): number {
 
 function metaLine(item: Item): string {
   const parts = [`id:${item.id}`, `created:${item.createdAt}`];
-  if (item.status === 'complete') {
+  if (item.statusTemp === 'complete') {
     parts.push(`completed:${item.completedAt}`);
   }
-  if (item.status === 'discarded') {
+  if (item.statusTemp === 'discarded') {
     parts.push(`discarded:${item.discardedAt}`);
   }
   return `<!-- ${parts.join(' ')} -->`;

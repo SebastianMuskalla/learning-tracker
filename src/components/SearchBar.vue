@@ -26,7 +26,7 @@ function clear(): void {
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape') return;
-  // Keep the global handler from also treating this Escape as "close the drawer".
+  // Keep the global handler from also treating this Escape as "close the detail view".
   event.stopPropagation();
   if (searchStore.term !== '') {
     searchStore.clear();

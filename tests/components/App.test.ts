@@ -16,6 +16,7 @@ vi.mock('../../src/github/client', async (importOriginal) => {
 });
 
 const getFile = vi.mocked(client.getFile);
+const putFile = vi.mocked(client.putFile);
 
 function configure(): void {
   localStorage.setItem(
@@ -75,7 +76,7 @@ describe('unload protection (C4)', () => {
 
   it('asks while an editor has an unsaved draft', () => {
     const { wrapper, board } = mountApp();
-    board.setDraftDirty('drawer-description', true);
+    board.setDraftDirty('detail-view-description', true);
 
     expect(beforeUnloadIsBlocked()).toBe(true);
     wrapper.unmount();
@@ -147,6 +148,27 @@ describe('page lifecycle (C2)', () => {
     wrapper.unmount();
   });
 
+  it('a save tells the other tabs the new sha (C7)', async () => {
+    configure();
+    const { wrapper, board } = mountApp();
+    await flushPromises();
+    const otherTab = new BroadcastChannel('learning-tracker');
+    const received: unknown[] = [];
+    otherTab.onmessage = (event: MessageEvent) => {
+      received.push(event.data);
+    };
+    putFile.mockResolvedValue({ ok: true, value: { sha: 's2' } });
+
+    board.applyAndSync({ type: 'add', headline: unwrap(makeHeadline('Mine')) });
+    await board.flushNow();
+
+    await vi.waitFor(() => {
+      expect(received).toContainEqual({ file: 'me/learning-data/main/learning.md', sha: 's2' });
+    });
+    otherTab.close();
+    wrapper.unmount();
+  });
+
   it('removes the listeners on unmount', async () => {
     configure();
     const { wrapper, board } = mountApp();
@@ -157,5 +179,33 @@ describe('page lifecycle (C2)', () => {
     setVisibility('hidden');
 
     expect(flushNow).not.toHaveBeenCalled();
+  });
+});
+
+describe('token rejected (setup)', () => {
+  it('opens the setup screen again after a rejection that happened while the setup screen was open', async () => {
+    configure();
+    const { wrapper, board } = mountApp();
+    await flushPromises();
+    expect(wrapper.find('.setup').exists()).toBe(false);
+
+    getFile.mockResolvedValue({ ok: false, error: { type: 'Unauthorized' } });
+    await board.load();
+    await flushPromises();
+    expect(wrapper.find('.setup').exists()).toBe(true);
+
+    // A second rejection while the setup screen is open, for example for a tag change.
+    await board.load();
+    await flushPromises();
+
+    // The user closes the setup screen without a new token: the board reads the file again.
+    await wrapper.get('button.close').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('.setup').exists()).toBe(true);
+    expect(wrapper.get('.reason').text()).toBe(
+      'The token was rejected (401). Check it on the settings screen.',
+    );
+    wrapper.unmount();
   });
 });

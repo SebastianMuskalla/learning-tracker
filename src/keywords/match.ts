@@ -1,7 +1,7 @@
 import type { ItemId } from '../domain/types';
 import { titleCase, type Keyword } from './keywords';
 
-/** A keyword that links to a target topic. */
+/** A keyword that links to a target item. */
 export interface LinkKeyword {
   readonly keyword: Keyword;
   readonly targetId: ItemId;

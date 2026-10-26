@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemId } from '../../src/domain/types';
-import { extractKeywords } from '../../src/links/keywords';
-import { findKeywordHits, type LinkKeyword } from '../../src/links/match';
+import { extractKeywords } from '../../src/keywords/keywords';
+import { findKeywordHits, type LinkKeyword } from '../../src/keywords/match';
 
 /** One target per headline. The target id is the headline. */
 function targets(...headlines: string[]): LinkKeyword[] {
@@ -108,6 +108,10 @@ describe('findKeywordHits: plurals', () => {
     expect(hits('APIS', 'API')).toEqual([]);
     expect(hits('OWASPx', 'OWASP')).toEqual([]);
     expect(hits('APIsx', 'API')).toEqual([]);
+  });
+
+  it('does not match an irregular plural', () => {
+    expect(hits('Policies and policy', 'Policy')).toEqual(['policy']);
   });
 
   it('allows a plural of a 2-character keyword', () => {

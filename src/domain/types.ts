@@ -4,8 +4,7 @@ export type Headline = string & { readonly __brand: 'Headline' };
 export type Description = string & { readonly __brand: 'Description' };
 export type TagName = string & { readonly __brand: 'TagName' };
 export type HexColor = string & { readonly __brand: 'HexColor' };
-/** A UTC timestamp, either full (`2026-09-16T14:32:07Z`) or, for data written before this app
- *  tracked time, date-only (`2026-09-16`). See `makeIsoTimestamp` in factories.ts. */
+/** A full UTC timestamp, for example `2026-09-16T14:32:07Z`. See `makeIsoTimestamp` in factories.ts. */
 export type IsoTimestamp = string & { readonly __brand: 'IsoTimestamp' };
 
 export interface Tag {
@@ -23,25 +22,26 @@ export interface ItemBase {
 }
 
 export type ActiveItem = ItemBase & {
-  readonly status: 'active';
+  readonly statusTemp: 'active';
   readonly description: Description | null;
 };
 
 export type CompleteItem = ItemBase & {
-  readonly status: 'complete';
+  readonly statusTemp: 'complete';
   readonly description: Description;
   readonly completedAt: IsoTimestamp;
 };
 
 export type DiscardedItem = ItemBase & {
-  readonly status: 'discarded';
+  readonly statusTemp: 'discarded';
   readonly description: Description | null;
   readonly discardedAt: IsoTimestamp;
 };
 
 export type Item = ActiveItem | CompleteItem | DiscardedItem;
 
-export type Section = 'new' | 'wip' | 'complete' | 'discarded';
+/** The status of an item. The board has one section for each status. */
+export type Status = 'new' | 'wip' | 'complete' | 'discarded';
 
 export interface Board {
   /** Tag definitions, in display order (the order a new tag is appended in). */
@@ -52,8 +52,8 @@ export interface Board {
   readonly discarded: readonly DiscardedItem[];
 }
 
-export function sectionOf(item: Item): Section {
-  switch (item.status) {
+export function statusOf(item: Item): Status {
+  switch (item.statusTemp) {
     case 'active':
       return item.description === null ? 'new' : 'wip';
     case 'complete':

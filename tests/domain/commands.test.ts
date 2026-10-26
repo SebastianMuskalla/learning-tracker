@@ -52,7 +52,7 @@ describe('add', () => {
     expect(board.new).toHaveLength(1);
     expect(first(board.new)).toMatchObject({
       headline: 'Rust ownership',
-      status: 'active',
+      statusTemp: 'active',
       description: null,
       createdAt: DAY_1,
       tags: [],
@@ -69,7 +69,7 @@ describe('add', () => {
 
 describe('setDescription', () => {
   it('moves an item from New to WIP when a description is added', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') });
     expect(board.new).toHaveLength(0);
@@ -78,7 +78,7 @@ describe('setDescription', () => {
   });
 
   it('moves an item back from WIP to New when the description is cleared', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') });
     board = run(board, { type: 'setDescription', id, description: null });
@@ -87,7 +87,7 @@ describe('setDescription', () => {
   });
 
   it('rejects clearing the description of a Complete item', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') });
     board = run(board, { type: 'complete', id }, DAY_2);
@@ -96,7 +96,7 @@ describe('setDescription', () => {
   });
 
   it('updates a Discarded item description in place', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'discard', id }, DAY_2);
     board = run(board, { type: 'setDescription', id, description: description('why it was dropped') });
@@ -105,16 +105,56 @@ describe('setDescription', () => {
   });
 });
 
+describe('position after a status change', () => {
+  /** New: "Plain". WIP: "Other", "Moving". Complete: "Done". */
+  function sampleBoard(): { board: Board; id: (text: string) => Board['wip'][number]['id'] } {
+    let board = emptyBoard();
+    for (const text of ['Done', 'Moving', 'Other', 'Plain']) {
+      board = run(board, { type: 'add', headline: headline(text) });
+    }
+    const id = (text: string) => {
+      const found = [...board.new, ...board.wip].find((item) => item.headline === text)?.id;
+      if (found === undefined) throw new Error(`no item ${text}`);
+      return found;
+    };
+    for (const text of ['Done', 'Moving', 'Other']) {
+      board = run(board, { type: 'setDescription', id: id(text), description: description('notes') });
+    }
+    board = run(board, { type: 'complete', id: id('Done') });
+    return { board, id };
+  }
+
+  it('puts an item that gets a description at the top of WIP', () => {
+    let board = run(sampleBoard().board, { type: 'add', headline: headline('Fresh') });
+    const fresh = first(board.new).id;
+    board = run(board, { type: 'setDescription', id: fresh, description: description('notes') });
+    expect(board.wip.map((item) => item.headline)).toEqual(['Fresh', 'Other', 'Moving']);
+  });
+
+  it('puts an item that loses its description at the top of New', () => {
+    const sample = sampleBoard();
+    let board = run(sample.board, { type: 'add', headline: headline('Newest') });
+    board = run(board, { type: 'setDescription', id: sample.id('Moving'), description: null });
+    expect(board.new.map((item) => item.headline)).toEqual(['Moving', 'Newest', 'Plain']);
+  });
+
+  it('puts a completed item at the top of Complete', () => {
+    const sample = sampleBoard();
+    const board = run(sample.board, { type: 'complete', id: sample.id('Moving') });
+    expect(board.complete.map((item) => item.headline)).toEqual(['Moving', 'Done']);
+  });
+});
+
 describe('complete / uncomplete', () => {
   it('rejects completing an item without a description', () => {
-    const board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    const board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     const result = applyCommand(board, { type: 'complete', id });
     expect(result).toEqual({ ok: false, error: { type: 'CompleteRequiresDescription', id } });
   });
 
   it('moves a WIP item to Complete, stamping completedAt and dropping nothing else', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') }, DAY_1);
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') }, DAY_1);
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') }, DAY_1);
     board = run(board, { type: 'complete', id }, DAY_2);
@@ -128,17 +168,17 @@ describe('complete / uncomplete', () => {
   });
 
   it('reopens a Complete item back to WIP', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') });
     board = run(board, { type: 'complete', id }, DAY_2);
     board = run(board, { type: 'uncomplete', id });
     expect(board.complete).toHaveLength(0);
-    expect(first(board.wip)).toMatchObject({ id, status: 'active', description: 'notes' });
+    expect(first(board.wip)).toMatchObject({ id, statusTemp: 'active', description: 'notes' });
   });
 
   it('rejects uncompleting a non-Complete item', () => {
-    const board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    const board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     const result = applyCommand(board, { type: 'uncomplete', id });
     expect(result).toEqual({ ok: false, error: { type: 'WrongStatus', id, expected: 'complete' } });
@@ -146,7 +186,7 @@ describe('complete / uncomplete', () => {
 
   it("keeps the item's tags across complete and uncomplete", () => {
     const vue = tagName('vue');
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'createTag', name: vue, color: hexColor('#aacbee') });
     board = run(board, { type: 'tagItem', id, tag: vue });
@@ -160,7 +200,7 @@ describe('complete / uncomplete', () => {
 
 describe('discard / restore', () => {
   it('discards a New item and drops nothing (no completedAt existed)', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') }, DAY_1);
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') }, DAY_1);
     const id = first(board.new).id;
     board = run(board, { type: 'discard', id }, DAY_2);
     expect(board.new).toHaveLength(0);
@@ -168,16 +208,16 @@ describe('discard / restore', () => {
   });
 
   it('discarding a Complete item drops completedAt', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') });
     board = run(board, { type: 'complete', id }, DAY_1);
     board = run(board, { type: 'discard', id }, DAY_2);
     expect(first(board.discarded)).toEqual({
       id,
-      headline: 'Topic',
+      headline: 'Item',
       createdAt: DAY_1,
-      status: 'discarded',
+      statusTemp: 'discarded',
       description: 'notes',
       discardedAt: DAY_2,
       tags: [],
@@ -185,7 +225,7 @@ describe('discard / restore', () => {
   });
 
   it('rejects discarding an already-discarded item', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'discard', id });
     const result = applyCommand(board, { type: 'discard', id });
@@ -211,7 +251,7 @@ describe('discard / restore', () => {
 
   it("keeps the item's tags across discard and restore", () => {
     const vue = tagName('vue');
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'createTag', name: vue, color: hexColor('#aacbee') });
     board = run(board, { type: 'tagItem', id, tag: vue });
@@ -224,7 +264,7 @@ describe('discard / restore', () => {
 
 describe('tags', () => {
   it('createTag appends the tag; the items are the same objects as before', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const itemsBefore = board.new;
     board = run(board, { type: 'createTag', name: tagName('vue'), color: hexColor('#aacbee') });
     expect(board.tags).toEqual([{ name: 'vue', color: '#aacbee' }]);
@@ -298,7 +338,7 @@ describe('tags', () => {
     const b = tagName('b');
     let board = run(emptyBoard(), { type: 'createTag', name: a, color: hexColor('#aacbee') });
     board = run(board, { type: 'createTag', name: b, color: hexColor('#f6c9a4') });
-    board = run(board, { type: 'add', headline: headline('Topic') });
+    board = run(board, { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
 
     board = run(board, { type: 'tagItem', id, tag: b });
@@ -309,7 +349,7 @@ describe('tags', () => {
 
   it('tagItem rejects an unknown tag and a tag already on the item', () => {
     let board = run(emptyBoard(), { type: 'createTag', name: tagName('vue'), color: hexColor('#aacbee') });
-    board = run(board, { type: 'add', headline: headline('Topic') });
+    board = run(board, { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
 
     const unknown = applyCommand(board, { type: 'tagItem', id, tag: tagName('rust') });
@@ -322,7 +362,7 @@ describe('tags', () => {
 
   it('untagItem removes the tag; rejects a tag not on the item', () => {
     let board = run(emptyBoard(), { type: 'createTag', name: tagName('vue'), color: hexColor('#aacbee') });
-    board = run(board, { type: 'add', headline: headline('Topic') });
+    board = run(board, { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'tagItem', id, tag: tagName('vue') });
 
@@ -354,7 +394,7 @@ describe('reorder', () => {
 
 describe('delete', () => {
   it('permanently removes a Discarded item', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'discard', id });
     board = run(board, { type: 'delete', id });
@@ -362,7 +402,7 @@ describe('delete', () => {
   });
 
   it('permanently removes an item that was never discarded', () => {
-    let board = run(emptyBoard(), { type: 'add', headline: headline('Topic') });
+    let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'delete', id });
     expect(board.new).toHaveLength(0);

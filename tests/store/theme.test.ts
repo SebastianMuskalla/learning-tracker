@@ -14,7 +14,7 @@ beforeEach(() => {
 describe('theme store', () => {
   it('follows the device theme by default and sets no data-theme attribute', () => {
     const theme = useThemeStore();
-    expect(theme.mode).toBe('system');
+    expect(theme.mode).toBe('device');
     expect(document.documentElement.dataset['theme']).toBeUndefined();
   });
 
@@ -24,7 +24,7 @@ describe('theme store', () => {
     expect(document.documentElement.dataset['theme']).toBe('dark');
     theme.setMode('light');
     expect(document.documentElement.dataset['theme']).toBe('light');
-    theme.setMode('system');
+    theme.setMode('device');
     expect(document.documentElement.dataset['theme']).toBeUndefined();
   });
 
@@ -39,10 +39,10 @@ describe('theme store', () => {
     expect(document.documentElement.dataset['theme']).toBe('dark');
   });
 
-  it('falls back to the device mode when the stored value is unknown', () => {
-    localStorage.setItem(STORAGE_KEY, 'sepia');
+  it.each(['sepia', 'system'])('falls back to the device mode for the stored value %s', (value) => {
+    localStorage.setItem(STORAGE_KEY, value);
     const theme = useThemeStore();
-    expect(theme.mode).toBe('system');
+    expect(theme.mode).toBe('device');
     expect(document.documentElement.dataset['theme']).toBeUndefined();
   });
 });

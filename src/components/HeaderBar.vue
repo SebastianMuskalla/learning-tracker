@@ -2,6 +2,9 @@
 import { ref } from 'vue';
 import { makeHeadline } from '../domain/factories';
 
+/** `addDisabled`: the "Item" field and the Add button do nothing, for example while learning.md is missing. */
+const { addDisabled } = defineProps<{ readonly addDisabled?: boolean }>();
+
 const emit = defineEmits<{
   add: [headline: string];
   openSettings: [];
@@ -30,10 +33,19 @@ defineExpose({ focusAddInput });
 </script>
 
 <template>
-  <header class="topbar">
+  <header class="header-bar">
     <form class="add" @submit.prevent="submitAdd">
-      <input ref="addInput" v-model="draft" type="text" placeholder="Topic" aria-label="Add topic" />
-      <button type="submit"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add</button>
+      <input
+        ref="addInput"
+        v-model="draft"
+        type="text"
+        placeholder="Item"
+        aria-label="Add item"
+        :disabled="addDisabled"
+      />
+      <button type="submit" :disabled="addDisabled">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i> Add
+      </button>
     </form>
 
     <button class="settings" title="Settings" @click="emit('openSettings')">
@@ -44,7 +56,7 @@ defineExpose({ focusAddInput });
 </template>
 
 <style scoped>
-.topbar {
+.header-bar {
   display: flex;
   align-items: center;
   gap: 1rem;

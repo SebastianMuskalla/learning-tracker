@@ -2,9 +2,9 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyBoard } from '../../src/domain/board';
 import { applyCommand } from '../../src/domain/commands';
-import { makeHeadline } from '../../src/domain/factories';
+import { makeDescription, makeHeadline, makeHexColor, makeTagName } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
-import type { Board, Headline } from '../../src/domain/types';
+import type { Board, Description, Headline, ItemId } from '../../src/domain/types';
 import * as parseModule from '../../src/format/parse';
 import { serialize } from '../../src/format/serialize';
 import * as client from '../../src/github/client';
@@ -97,15 +97,41 @@ describe('load', () => {
     expect(board.fileNotFound).toBe(false);
   });
 
-  it('does not read from the browser HTTP cache', async () => {
+  it('refuses a change while the file is missing, and saves nothing', async () => {
     const { board } = setup();
-    getFile.mockResolvedValue({ ok: true, value: { text: serialize(emptyBoard()), sha: 'sha-1' } });
-
+    getFile.mockResolvedValue({ ok: false, error: { type: 'NotFound' } });
     await board.load();
 
-    // getFile/putFile are mocked here, so this only pins the contract; the actual
-    // `cache: 'no-store'` fetch option is covered directly in tests/github (client behaviour).
-    expect(getFile).toHaveBeenCalledWith(expect.objectContaining({ owner: 'me' }));
+    board.applyAndSync({ type: 'add', headline: 'Mine' as never });
+    await board.flushNow();
+
+    expect(board.board.new).toEqual([]);
+    expect(board.syncStatus).toBe('error');
+    expect(board.errorMessage).toContain('Create it');
+    expect(putFile).not.toHaveBeenCalled();
+  });
+
+  it('holds a change made before the file turned out missing, and saves it after "Create it"', async () => {
+    const { board } = setup();
+    vi.useFakeTimers();
+    board.applyAndSync({ type: 'add', headline: 'Early' as never });
+    getFile.mockResolvedValue({ ok: false, error: { type: 'NotFound' } });
+    await board.load();
+
+    await board.flushNow();
+    board.flushBeforeUnload();
+    expect(putFile).not.toHaveBeenCalled();
+
+    putFile.mockResolvedValueOnce({ ok: true, value: { sha: 'sha-init' } });
+    putFile.mockResolvedValueOnce({ ok: true, value: { sha: 'sha-add' } });
+    await board.initializeEmptyFile();
+    await vi.runAllTimersAsync();
+
+    expect(putFile).toHaveBeenCalledTimes(2);
+    expect(putFile.mock.calls[0]?.[1]).toMatchObject({ sha: null, message: 'Initialize learning.md' });
+    expect(putFile.mock.calls[1]?.[1]).toMatchObject({ sha: 'sha-init', message: 'Add "Early"' });
+    expect(board.sha).toBe('sha-add');
+    vi.useRealTimers();
   });
 
   it('refresh() is a no-op while there is unwritten local work', async () => {
@@ -246,6 +272,23 @@ describe('applyAndSync — batching and the commit pipeline', () => {
     expect(board.syncStatus).toBe('saved');
   });
 
+  it('starts the save 800 ms after the last of 3 changes within 500 ms', async () => {
+    const board = await loaded();
+    putFile.mockResolvedValue({ ok: true, value: { sha: 'sha-2' } });
+
+    vi.useFakeTimers();
+    board.applyAndSync({ type: 'add', headline: 'First' as never });
+    await vi.advanceTimersByTimeAsync(250);
+    board.applyAndSync({ type: 'add', headline: 'Second' as never });
+    await vi.advanceTimersByTimeAsync(250);
+    board.applyAndSync({ type: 'add', headline: 'Third' as never });
+
+    await vi.advanceTimersByTimeAsync(799);
+    expect(putFile).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(putFile).toHaveBeenCalledTimes(1);
+  });
+
   it('force-flushes once a batch reaches the hard cap of commands, without waiting for quiet', async () => {
     const board = await loaded();
     putFile.mockResolvedValue({ ok: true, value: { sha: 'sha-2' } });
@@ -284,7 +327,7 @@ describe('applyAndSync — batching and the commit pipeline', () => {
     // Establish a known item id first, so the next write's exact bytes are predictable.
     putFile.mockResolvedValueOnce({ ok: true, value: { sha: 'sha-2' } });
     vi.useFakeTimers();
-    board.applyAndSync({ type: 'add', headline: 'Shared topic' as never });
+    board.applyAndSync({ type: 'add', headline: 'Shared item' as never });
     await vi.runAllTimersAsync();
     const [sharedItem] = board.board.new;
     if (!sharedItem) throw new Error('unexpected: no shared item in fixture');
@@ -336,7 +379,7 @@ describe('applyAndSync — batching and the commit pipeline', () => {
     // Establish a synced item both sides will then edit differently.
     putFile.mockResolvedValueOnce({ ok: true, value: { sha: 'sha-2' } });
     vi.useFakeTimers();
-    board.applyAndSync({ type: 'add', headline: 'Shared topic' as never });
+    board.applyAndSync({ type: 'add', headline: 'Shared item' as never });
     await vi.runAllTimersAsync();
     const [sharedItem] = board.board.new;
     if (!sharedItem) throw new Error('unexpected: no shared item in fixture');
@@ -359,14 +402,14 @@ describe('applyAndSync — batching and the commit pipeline', () => {
     expect(board.conflict?.local.new.map((i) => i.headline)).toEqual(['Mine edit']);
     expect(board.conflict?.remote.new.map((i) => i.headline)).toEqual(['Theirs edit']);
     // The board shown while the conflict is unresolved is the last known-good local state.
-    expect(board.board.new.map((i) => i.headline)).toEqual(['Shared topic']);
+    expect(board.board.new.map((i) => i.headline)).toEqual(['Shared item']);
   });
 
   it('resolveConflict("keepTheirs") adopts the remote board and clears the conflict', async () => {
     const board = await loaded();
     putFile.mockResolvedValueOnce({ ok: true, value: { sha: 'sha-2' } });
     vi.useFakeTimers();
-    board.applyAndSync({ type: 'add', headline: 'Shared topic' as never });
+    board.applyAndSync({ type: 'add', headline: 'Shared item' as never });
     await vi.runAllTimersAsync();
     const [sharedItem] = board.board.new;
     if (!sharedItem) throw new Error('unexpected: no shared item in fixture');
@@ -400,7 +443,7 @@ describe('applyAndSync — batching and the commit pipeline', () => {
     const board = await loaded();
     putFile.mockResolvedValueOnce({ ok: true, value: { sha: 'sha-2' } });
     vi.useFakeTimers();
-    board.applyAndSync({ type: 'add', headline: 'Shared topic' as never });
+    board.applyAndSync({ type: 'add', headline: 'Shared item' as never });
     await vi.runAllTimersAsync();
     const [sharedItem] = board.board.new;
     if (!sharedItem) throw new Error('unexpected: no shared item in fixture');
@@ -420,8 +463,12 @@ describe('applyAndSync — batching and the commit pipeline', () => {
 
     putFile.mockReset();
     putFile.mockResolvedValue({ ok: true, value: { sha: 'sha-4' } });
+    // keepMine also reads the file again, and merges the local version onto it.
+    getFile.mockClear();
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(remoteBoard.value), sha: 'sha-3' } });
     await board.resolveConflict('keepMine');
 
+    expect(getFile).toHaveBeenCalledTimes(1);
     expect(putFile).toHaveBeenCalledTimes(1);
     const [, input] = putFile.mock.calls[0] as [unknown, { sha: string | null }];
     expect(input.sha).toBe('sha-3');
@@ -459,7 +506,58 @@ describe('applyAndSync — batching and the commit pipeline', () => {
 
     expect(putFile).not.toHaveBeenCalled();
     expect(board.syncStatus).toBe('error');
+    expect(board.errorMessage).toBe(
+      'Internal error: the change could not be safely written back. Nothing was committed.',
+    );
     expect(board.board).toBe(before);
+  });
+
+  it('aborts a merged save when the round-trip gate detects a mismatch, committing nothing', async () => {
+    const board = await loaded();
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce({
+      ok: true,
+      value: { text: serialize(boardWithOneItem('Theirs')), sha: 'sha-2' },
+    });
+    const { parse: actualParse } =
+      await vi.importActual<typeof import('../../src/format/parse')>('../../src/format/parse');
+    // Only the merged text contains both items.
+    parseSpy.mockImplementation((text) =>
+      text.includes('### Mine') && text.includes('### Theirs')
+        ? { ok: true, value: emptyBoard() }
+        : actualParse(text),
+    );
+
+    try {
+      vi.useFakeTimers();
+      board.applyAndSync({ type: 'add', headline: 'Mine' as never });
+      await vi.runAllTimersAsync();
+
+      expect(putFile).toHaveBeenCalledTimes(1);
+      expect(board.syncStatus).toBe('error');
+      expect(board.errorMessage).toBe(
+        'Internal error: the merged change could not be safely written back. Nothing was committed.',
+      );
+    } finally {
+      parseSpy.mockImplementation(actualParse);
+    }
+  });
+
+  it('keeps the description of a Complete item that the user tries to remove, and says why', async () => {
+    let base = boardWithOneItem('Docker');
+    const id = base.new[0]?.id;
+    if (id === undefined) throw new Error('fixture has no item');
+    base = unwrap(applyCommand(base, { type: 'setDescription', id, description: 'Notes' as never }));
+    base = unwrap(applyCommand(base, { type: 'complete', id }));
+    const { board } = setup();
+    getFile.mockResolvedValue({ ok: true, value: { text: serialize(base), sha: 'sha-1' } });
+    await board.load();
+
+    board.applyAndSync({ type: 'setDescription', id, description: null });
+
+    expect(board.board.complete[0]?.description).toBe('Notes');
+    expect(board.errorMessage).toBe('A completed item must have a description.');
+    expect(putFile).not.toHaveBeenCalled();
   });
 
   it('aborts immediately and restores the previous board when the domain command is rejected', async () => {
@@ -691,6 +789,452 @@ describe('edits while a request is in flight (C1)', () => {
     expect(board.notice).toContain('dropped');
     expect(board.hasUnsavedWork).toBe(false);
   });
+
+  it('tells the user when the merge drops an in-flight change, because GitHub deleted the item', async () => {
+    vi.useFakeTimers();
+    const { board } = setup();
+    const base = unwrap(applyCommand(emptyBoard(), { type: 'add', headline: headline('Shared') }));
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(base), sha: 's1' } });
+    await board.load();
+    const sharedId = board.board.new[0]?.id;
+    if (sharedId === undefined) throw new Error('fixture has no item');
+
+    // The rename is in flight when GitHub rejects the save. GitHub deleted the item, and the
+    // merge lets the delete win.
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(emptyBoard()), sha: 's2' } });
+    putFile.mockResolvedValue({ ok: true, value: { sha: 's3' } });
+
+    board.applyAndSync({ type: 'editHeadline', id: sharedId, headline: headline('Renamed') });
+    await vi.runAllTimersAsync();
+
+    expect(board.board.new).toEqual([]);
+    expect(board.notice).toBe('One change no longer fit the newest version of learning.md and was dropped.');
+    expect(board.hasUnsavedWork).toBe(false);
+    // GitHub already has the merged result: no second request, so no empty commit.
+    expect(putFile).toHaveBeenCalledTimes(1);
+    expect(board.sha).toBe('s2');
+  });
+
+  it('the commit message of a merged save does not name a change that the merge lost', async () => {
+    vi.useFakeTimers();
+    const { board } = setup();
+    const base = unwrap(applyCommand(emptyBoard(), { type: 'add', headline: headline('Git') }));
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(base), sha: 's1' } });
+    await board.load();
+    const gitId = board.board.new[0]?.id;
+    if (gitId === undefined) throw new Error('fixture has no item');
+
+    // Another device deleted "Git". The batch adds "Docker" and renames "Git".
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(emptyBoard()), sha: 's2' } });
+    putFile.mockResolvedValueOnce({ ok: true, value: { sha: 's3' } });
+
+    board.applyAndSync({ type: 'add', headline: headline('Docker') });
+    board.applyAndSync({ type: 'editHeadline', id: gitId, headline: headline('Git basics') });
+    await vi.runAllTimersAsync();
+
+    expect(putFile).toHaveBeenCalledTimes(2);
+    const [, retried] = putFile.mock.calls[1] as [unknown, { message: string }];
+    expect(retried.message).toBe('Add "Docker"');
+    expect(putHeadlines(1)).toEqual(['Docker']);
+    expect(board.syncStatus).toBe('saved');
+  });
+
+  it('removes a tag that GitHub deleted from the item, without a message and without naming it', async () => {
+    vi.useFakeTimers();
+    const { board } = setup();
+    const cloud = unwrap(makeTagName('Cloud'));
+    let base = unwrap(applyCommand(emptyBoard(), { type: 'add', headline: headline('Docker') }));
+    base = unwrap(
+      applyCommand(base, { type: 'createTag', name: cloud, color: unwrap(makeHexColor('#aacbee')) }),
+    );
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(base), sha: 's1' } });
+    await board.load();
+    const dockerId = board.board.new[0]?.id;
+    if (dockerId === undefined) throw new Error('fixture has no item');
+
+    // Another device deleted the tag. The batch tags "Docker" with it and adds "Git".
+    const remote = unwrap(applyCommand(base, { type: 'deleteTag', name: cloud }));
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(remote), sha: 's2' } });
+    putFile.mockResolvedValueOnce({ ok: true, value: { sha: 's3' } });
+
+    board.applyAndSync({ type: 'tagItem', id: dockerId, tag: cloud });
+    board.applyAndSync({ type: 'add', headline: headline('Git') });
+    await vi.runAllTimersAsync();
+
+    expect(putFile).toHaveBeenCalledTimes(2);
+    const [, retried] = putFile.mock.calls[1] as [unknown, { message: string }];
+    expect(retried.message).toBe('Add "Git"');
+    expect(board.board.tags).toEqual([]);
+    expect(board.board.new.find((item) => item.id === dockerId)?.tags).toEqual([]);
+    expect(board.notice).toBeNull();
+    expect(board.syncStatus).toBe('saved');
+  });
+
+  it('keeps a local reorder when GitHub changed another item and did not reorder', async () => {
+    vi.useFakeTimers();
+    const { board } = setup();
+    let base = unwrap(applyCommand(emptyBoard(), { type: 'add', headline: headline('A') }));
+    base = unwrap(applyCommand(base, { type: 'add', headline: headline('B') }));
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(base), sha: 's1' } });
+    await board.load();
+    const idOfB = board.board.new[0]?.id;
+    if (idOfB === undefined) throw new Error('fixture has no item');
+    const remote = unwrap(applyCommand(base, { type: 'editHeadline', id: idOfB, headline: headline('B2') }));
+
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(remote), sha: 's2' } });
+    putFile.mockResolvedValueOnce({ ok: true, value: { sha: 's3' } });
+
+    board.applyAndSync({ type: 'reorder', section: 'new', fromIndex: 0, toIndex: 1 });
+    await vi.runAllTimersAsync();
+
+    const [, retried] = putFile.mock.calls[1] as [unknown, { message: string }];
+    expect(retried.message).toBe('Reorder New');
+    expect(putHeadlines(1)).toEqual(['A', 'B2']);
+    expect(board.notice).toBeNull();
+  });
+
+  it('drops a local reorder when GitHub reordered the same section, and tells the user', async () => {
+    vi.useFakeTimers();
+    const { board } = setup();
+    let base = emptyBoard();
+    for (const text of ['A', 'B', 'C']) {
+      base = unwrap(applyCommand(base, { type: 'add', headline: headline(text) }));
+    }
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(base), sha: 's1' } });
+    await board.load();
+    // Base order: C, B, A. GitHub: A, C, B.
+    const remote = unwrap(applyCommand(base, { type: 'reorder', section: 'new', fromIndex: 2, toIndex: 0 }));
+
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(remote), sha: 's2' } });
+    putFile.mockResolvedValueOnce({ ok: true, value: { sha: 's3' } });
+
+    // Local: D, B, A, C.
+    board.applyAndSync({ type: 'add', headline: headline('D') });
+    board.applyAndSync({ type: 'reorder', section: 'new', fromIndex: 1, toIndex: 3 });
+    await vi.runAllTimersAsync();
+
+    const [, retried] = putFile.mock.calls[1] as [unknown, { message: string }];
+    expect(retried.message).toBe('Add "D"');
+    expect(putHeadlines(1)).toEqual(['D', 'A', 'C', 'B']);
+    expect(board.notice).toBe('One change no longer fit the newest version of learning.md and was dropped.');
+  });
+});
+
+describe('conflict check before local commands are applied again', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function description(text: string): Description {
+    return unwrap(makeDescription(text));
+  }
+
+  /** The items A, B, and C on GitHub at sha `s1`; A has the description "base". */
+  async function loadedABC(): Promise<{
+    board: ReturnType<typeof useBoardStore>;
+    base: Board;
+    idOf: (text: string) => ItemId;
+  }> {
+    vi.useFakeTimers();
+    const { board } = setup();
+    let base = emptyBoard();
+    for (const text of ['A', 'B', 'C']) {
+      base = unwrap(applyCommand(base, { type: 'add', headline: headline(text) }));
+    }
+    const idOf = (text: string): ItemId => {
+      const id = [...base.new, ...base.wip].find((item) => item.headline === text)?.id;
+      if (id === undefined) throw new Error(`fixture has no item ${text}`);
+      return id;
+    };
+    base = unwrap(
+      applyCommand(base, { type: 'setDescription', id: idOf('A'), description: description('base') }),
+    );
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(base), sha: 's1' } });
+    await board.load();
+    return { board, base, idOf };
+  }
+
+  /** The text of the `index`-th PUT. */
+  function putText(index: number): string {
+    const call = putFile.mock.calls[index] as [unknown, { text: string }] | undefined;
+    if (!call) throw new Error(`expected a PUT at index ${String(index)}`);
+    return call[1].text;
+  }
+
+  it('a change made during a rejected save opens the conflict dialog for the same item', async () => {
+    const { board, base, idOf } = await loadedABC();
+    const remote = unwrap(
+      applyCommand(base, { type: 'setDescription', id: idOf('A'), description: description('Theirs') }),
+    );
+    const firstPut = deferred<PutResult>();
+    putFile.mockImplementationOnce(() => firstPut.promise);
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(remote), sha: 's2' } });
+    putFile.mockResolvedValue({ ok: true, value: { sha: 's3' } });
+
+    board.applyAndSync({ type: 'editHeadline', id: idOf('B'), headline: headline('B2') });
+    await vi.advanceTimersByTimeAsync(900); // the save of B is in flight
+    board.applyAndSync({ type: 'setDescription', id: idOf('A'), description: description('Mine') });
+    firstPut.resolve({ ok: false, error: { type: 'Conflict' } });
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(board.conflict?.conflicts).toEqual([{ type: 'DivergentEdit', id: idOf('A') }]);
+    expect(putFile).toHaveBeenCalledTimes(1);
+    expect(board.syncStatus).toBe('conflict');
+  });
+
+  it('a change made during a rejected save is saved without asking when GitHub changed another item', async () => {
+    const { board, base, idOf } = await loadedABC();
+    const remote = unwrap(
+      applyCommand(base, { type: 'editHeadline', id: idOf('C'), headline: headline('C2') }),
+    );
+    const firstPut = deferred<PutResult>();
+    putFile.mockImplementationOnce(() => firstPut.promise);
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(remote), sha: 's2' } });
+    putFile.mockResolvedValue({ ok: true, value: { sha: 's3' } });
+
+    board.applyAndSync({ type: 'editHeadline', id: idOf('B'), headline: headline('B2') });
+    await vi.advanceTimersByTimeAsync(900);
+    board.applyAndSync({ type: 'setDescription', id: idOf('A'), description: description('Mine') });
+    firstPut.resolve({ ok: false, error: { type: 'Conflict' } });
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(board.conflict).toBeNull();
+    expect(putFile).toHaveBeenCalledTimes(2);
+    const saved = unwrap(parseModule.parse(putText(1)));
+    expect(saved.new.map((i) => i.headline).sort()).toEqual(['B2', 'C2']);
+    expect(saved.wip.map((i) => i.description)).toEqual(['Mine']);
+    const [, retried] = putFile.mock.calls[1] as [unknown, { message: string; sha: string }];
+    expect(retried.sha).toBe('s2');
+    expect(retried.message).toBe('Update learning.md (2 changes)\n\n- Rename "B" → "B2"\n- Describe "A"');
+    expect(board.syncStatus).toBe('saved');
+  });
+
+  it('after the 4th rejected try, keeps the old sha and the commands, so that the retry merges again', async () => {
+    const { board, base, idOf } = await loadedABC();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const remote = unwrap(
+      applyCommand(base, { type: 'editHeadline', id: idOf('C'), headline: headline('C2') }),
+    );
+    putFile.mockResolvedValue({ ok: false, error: { type: 'Conflict' } });
+    // Each read after a 409 gets a new sha: s2, s3, s4, and s5 for the read after the 4th try.
+    for (const sha of ['s2', 's3', 's4', 's5']) {
+      getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(remote), sha } });
+    }
+
+    board.applyAndSync({ type: 'editHeadline', id: idOf('B'), headline: headline('B2') });
+    // The first try at 800 ms, then the backoff of 250 ms, 750 ms, and 1500 ms.
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(putFile).toHaveBeenCalledTimes(4);
+    expect(board.errorMessage).toBe('Could not save after several attempts. Not saved — will retry.');
+    // The board of the read after the 4th try is not confirmed without a merge.
+    expect(board.sha).toBe('s4');
+    expect(board.hasUnsavedWork).toBe(true);
+    expect(board.board.new.map((i) => i.headline)).toContain('B2');
+
+    putFile.mockReset();
+    putFile.mockResolvedValue({ ok: true, value: { sha: 's6' } });
+    await vi.advanceTimersByTimeAsync(2000); // the retry
+    const [, retry] = putFile.mock.calls[0] as [unknown, { sha: string }];
+    expect(retry.sha).toBe('s4');
+  });
+
+  it('load() does not read the file while a failed save keeps its commands', async () => {
+    const { board, idOf } = await loadedABC();
+    putFile.mockResolvedValue({ ok: false, error: { type: 'Forbidden', message: '' } });
+    board.applyAndSync({ type: 'editHeadline', id: idOf('B'), headline: headline('B2') });
+    await board.flushNow();
+    expect(board.hasUnsavedWork).toBe(true);
+    getFile.mockClear();
+
+    await board.load();
+
+    expect(putFile).toHaveBeenCalledTimes(2);
+    expect(getFile).not.toHaveBeenCalled();
+    expect(board.board.new.map((i) => i.headline)).toContain('B2');
+  });
+
+  it('a hand fix of a parse error that changes an item with a pending change opens the conflict dialog', async () => {
+    const { board, base, idOf } = await loadedABC();
+    // The save gets a 409, and the file on GitHub does not parse.
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: '<!-- version:5 -->\n\nbroken\n', sha: 's2' } });
+    board.applyAndSync({ type: 'setDescription', id: idOf('A'), description: description('Mine') });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(board.canWrite).toBe(false);
+    expect(board.hasUnsavedWork).toBe(true);
+
+    // The hand fix also changed the description of A.
+    const fixed = unwrap(
+      applyCommand(base, {
+        type: 'setDescription',
+        id: idOf('A'),
+        description: description('Fixed by hand'),
+      }),
+    );
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(fixed), sha: 's3' } });
+    await board.load();
+
+    expect(board.canWrite).toBe(true);
+    expect(board.conflict?.conflicts).toEqual([{ type: 'DivergentEdit', id: idOf('A') }]);
+    expect(board.sha).toBe('s1');
+    expect(putFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('a hand fix of a parse error that changes another item keeps the pending change', async () => {
+    const { board, base, idOf } = await loadedABC();
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: '<!-- version:5 -->\n\nbroken\n', sha: 's2' } });
+    board.applyAndSync({ type: 'setDescription', id: idOf('A'), description: description('Mine') });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    const fixed = unwrap(
+      applyCommand(base, { type: 'editHeadline', id: idOf('C'), headline: headline('C2') }),
+    );
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(fixed), sha: 's3' } });
+    putFile.mockResolvedValue({ ok: true, value: { sha: 's4' } });
+    await board.load();
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(board.conflict).toBeNull();
+    const [, saved] = putFile.mock.calls[1] as [unknown, { sha: string }];
+    expect(saved.sha).toBe('s3');
+    const savedBoard = unwrap(parseModule.parse(putText(1)));
+    expect(savedBoard.wip.map((i) => i.description)).toEqual(['Mine']);
+    expect(savedBoard.new.map((i) => i.headline)).toContain('C2');
+  });
+});
+
+describe('resolving a conflict keeps the changes without a conflict', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Item A conflicts. The local batch also renames item B; GitHub also renamed item C. Returns the
+   * store with the conflict dialog open, and GitHub's file ready for the read after the choice.
+   */
+  async function conflicted(): Promise<ReturnType<typeof useBoardStore>> {
+    vi.useFakeTimers();
+    const { board } = setup();
+    let base = emptyBoard();
+    for (const text of ['A', 'B', 'C']) {
+      base = unwrap(applyCommand(base, { type: 'add', headline: headline(text) }));
+    }
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(base), sha: 's1' } });
+    await board.load();
+    const idOf = (text: string): Board['new'][number]['id'] => {
+      const id = base.new.find((item) => item.headline === text)?.id;
+      if (id === undefined) throw new Error(`fixture has no item ${text}`);
+      return id;
+    };
+
+    let remote = unwrap(
+      applyCommand(base, { type: 'editHeadline', id: idOf('A'), headline: headline('A theirs') }),
+    );
+    remote = unwrap(
+      applyCommand(remote, { type: 'editHeadline', id: idOf('C'), headline: headline('C theirs') }),
+    );
+    const remoteFile = { ok: true, value: { text: serialize(remote), sha: 's2' } } as const;
+    putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
+    getFile.mockResolvedValueOnce(remoteFile);
+
+    board.applyAndSync({ type: 'editHeadline', id: idOf('A'), headline: headline('A mine') });
+    board.applyAndSync({ type: 'editHeadline', id: idOf('B'), headline: headline('B mine') });
+    await vi.runAllTimersAsync();
+    expect(board.conflict?.conflicts).toEqual([{ type: 'DivergentEdit', id: idOf('A') }]);
+
+    getFile.mockResolvedValueOnce(remoteFile);
+    putFile.mockResolvedValueOnce({ ok: true, value: { sha: 's3' } });
+    return board;
+  }
+
+  function lastPutHeadlines(): string[] {
+    return putHeadlines(putFile.mock.calls.length - 1).sort();
+  }
+
+  function lastPutMessage(): string {
+    const call = putFile.mock.calls.at(-1) as [unknown, { message: string }] | undefined;
+    if (!call) throw new Error('expected a PUT');
+    return call[1].message;
+  }
+
+  it("Keep my version: the local A, the local B, and GitHub's C", async () => {
+    const board = await conflicted();
+
+    await board.resolveConflict('keepMine');
+
+    expect(lastPutHeadlines()).toEqual(['A mine', 'B mine', 'C theirs']);
+    expect(board.board.new.map((i) => i.headline).sort()).toEqual(['A mine', 'B mine', 'C theirs']);
+    expect(board.conflict).toBeNull();
+    expect(board.syncStatus).toBe('saved');
+  });
+
+  it("Keep GitHub's version: GitHub's A, the local B, and GitHub's C", async () => {
+    const board = await conflicted();
+
+    await board.resolveConflict('keepTheirs');
+
+    expect(lastPutHeadlines()).toEqual(['A theirs', 'B mine', 'C theirs']);
+    expect(board.board.new.map((i) => i.headline).sort()).toEqual(['A theirs', 'B mine', 'C theirs']);
+    expect(board.conflict).toBeNull();
+    expect(board.syncStatus).toBe('saved');
+  });
+
+  it('Keep my version: the commit message names each local change', async () => {
+    const board = await conflicted();
+
+    await board.resolveConflict('keepMine');
+
+    expect(lastPutMessage()).toBe(
+      'Update learning.md (2 changes)\n\n- Rename "A" → "A mine"\n- Rename "B" → "B mine"',
+    );
+  });
+
+  it("Keep GitHub's version: the commit message does not name the discarded change", async () => {
+    const board = await conflicted();
+
+    await board.resolveConflict('keepTheirs');
+
+    expect(lastPutMessage()).toBe('Rename "B" → "B mine"');
+  });
+
+  it("Keep GitHub's version: a retry after a temporary error does not bring the discarded change back", async () => {
+    const board = await conflicted();
+    putFile.mockReset();
+    putFile
+      .mockResolvedValueOnce({ ok: false, error: { type: 'Network', message: 'offline' } })
+      .mockResolvedValueOnce({ ok: true, value: { sha: 's3' } });
+
+    await board.resolveConflict('keepTheirs');
+    expect(board.syncStatus).toBe('error');
+    await vi.runAllTimersAsync();
+
+    expect(putFile).toHaveBeenCalledTimes(2);
+    expect(lastPutHeadlines()).toEqual(['A theirs', 'B mine', 'C theirs']);
+    expect(lastPutMessage()).toBe('Rename "B" → "B mine"');
+    expect(board.syncStatus).toBe('saved');
+  });
+
+  it('a change made while the dialog is open, to an item that GitHub changed, opens the dialog again', async () => {
+    const board = await conflicted();
+    const idOfC = board.board.new.find((item) => item.headline === 'C')?.id;
+    if (idOfC === undefined) throw new Error('fixture has no item C');
+    // Remove the queued answer of `conflicted()`: this test expects no save.
+    putFile.mockReset();
+
+    board.applyAndSync({ type: 'editHeadline', id: idOfC, headline: headline('C mine') });
+    await board.resolveConflict('keepMine');
+
+    expect(board.conflict?.conflicts).toContainEqual({ type: 'DivergentEdit', id: idOfC });
+    expect(board.syncStatus).toBe('conflict');
+    expect(putFile).not.toHaveBeenCalled();
+  });
 });
 
 describe('refresh while the conflict dialog is open (C3)', () => {
@@ -913,6 +1457,54 @@ describe('write errors (E1)', () => {
     expect(board.syncStatus).toBe('saved');
   });
 
+  describe('the wait of 250 ms plus up to 20 % before the second try', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // `Math.random` 0 gives the shortest wait (250 ms), 1 the longest (300 ms).
+    it.each([
+      [0, 250],
+      [1, 300],
+    ])('after a rate limit without an end time, with Math.random %d: %d ms', async (random, wait) => {
+      const board = await loadedWithFakeTimers();
+      vi.spyOn(Math, 'random').mockReturnValue(random);
+      putFile
+        .mockResolvedValueOnce({ ok: false, error: { type: 'RateLimited', retryAfterSeconds: null } })
+        .mockResolvedValue({ ok: true, value: { sha: 's2' } });
+
+      board.applyAndSync({ type: 'add', headline: headline('Mine') });
+      await vi.advanceTimersByTimeAsync(800);
+      expect(putFile).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(wait - 1);
+      expect(putFile).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(putFile).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+      [0, 250],
+      [1, 300],
+    ])('after a merge of a rejected save, with Math.random %d: %d ms', async (random, wait) => {
+      const board = await loadedWithFakeTimers();
+      vi.spyOn(Math, 'random').mockReturnValue(random);
+      const remote = unwrap(applyCommand(emptyBoard(), { type: 'add', headline: headline('Theirs') }));
+      putFile
+        .mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } })
+        .mockResolvedValue({ ok: true, value: { sha: 's3' } });
+      getFile.mockResolvedValueOnce({ ok: true, value: { text: serialize(remote), sha: 's2' } });
+
+      board.applyAndSync({ type: 'add', headline: headline('Mine') });
+      await vi.advanceTimersByTimeAsync(800); // the first try, the read, and the merge
+      expect(putFile).toHaveBeenCalledTimes(1);
+      expect(getFile).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(wait - 1);
+      expect(putFile).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(putFile).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('rate limit with a long Retry-After: stops, keeps the work, frees the queue, and retries later', async () => {
     const board = await loadedWithFakeTimers();
     putFile
@@ -1000,10 +1592,10 @@ describe('hasUnsavedWork (C4)', () => {
     const { board } = setup();
     expect(board.hasUnsavedWork).toBe(false);
 
-    board.setDraftDirty('drawer-description', true);
+    board.setDraftDirty('detail-view-description', true);
     expect(board.hasUnsavedWork).toBe(true);
 
-    board.setDraftDirty('drawer-description', false);
+    board.setDraftDirty('detail-view-description', false);
     expect(board.hasUnsavedWork).toBe(false);
   });
 });
@@ -1163,7 +1755,7 @@ describe('upgrading learning.md', () => {
     expect(putFile).toHaveBeenCalledTimes(4);
     for (const call of putFile.mock.calls) expect(call[1].sha).toBe('sha-1');
     expect(board.syncStatus).toBe('error');
-    expect(board.errorMessage).toContain('Could not upgrade');
+    expect(board.errorMessage).toBe('Could not upgrade learning.md. Will retry on the next load.');
     expect(board.sha).toBeNull();
   });
 

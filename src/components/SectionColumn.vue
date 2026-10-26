@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { VueDraggable, type DraggableEvent } from 'vue-draggable-plus';
 import { ref, watch } from 'vue';
-import type { Item, ItemId, Section, Tag } from '../domain/types';
+import type { Item, ItemId, Status, Tag } from '../domain/types';
 import ItemCard from './ItemCard.vue';
 
 const { items, totalCount, filterActive, tags, dragDisabled } = defineProps<{
   readonly title: string;
-  readonly section: Section;
+  readonly section: Status;
   readonly items: readonly Item[];
   readonly totalCount: number;
   /** Whether a search or tag filter is currently active — determines the "x of y" header style

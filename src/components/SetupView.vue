@@ -21,7 +21,7 @@ const boardStore = useBoardStore();
 const theme = useThemeStore();
 
 const themeLabels: Record<ThemeMode, { readonly label: string; readonly icon: string }> = {
-  system: { label: 'Device', icon: 'fa-circle-half-stroke' },
+  device: { label: 'Device', icon: 'fa-circle-half-stroke' },
   light: { label: 'Light', icon: 'fa-sun' },
   dark: { label: 'Dark', icon: 'fa-moon' },
 };
@@ -171,8 +171,11 @@ async function testConnection(): Promise<void> {
       testState.value = 'ok';
       testMessage.value = `Connected — read ${String(result.value.text.length)} characters.`;
     } else if (result.error.type === 'NotFound') {
+      // GitHub also answers 404 for a wrong owner, repository, or branch, and for a token without
+      // access to the repository, so the message names these causes too.
       testState.value = 'ok';
-      testMessage.value = 'Connected — the file does not exist yet; it can be created on first save.';
+      testMessage.value =
+        'Connected — the file does not exist yet, or the owner, repository, branch, or token is wrong.';
     } else {
       testState.value = 'error';
       testMessage.value = describeError(result.error);
@@ -215,8 +218,8 @@ async function save(): Promise<void> {
     next.path !== settings.path;
   if (locationChanged && settings.isRepoConfigured) {
     // Write pending work to the repository it was made for before switching to another one
-    // (see doc/requirement-3-tagging.md, section 3.7). Switch only after a clean write, and then
-    // forget everything about the old repository.
+    // (see "Settings change with unsaved changes" in openspec/specs/setup/spec.md). Switch only
+    // after a clean write, and then forget everything about the old repository.
     await boardStore.flushNow();
     if (boardStore.hasUnsavedWork) {
       const reasonText = boardStore.errorMessage === null ? '' : ` (${boardStore.errorMessage})`;

@@ -102,7 +102,7 @@ describe('itemMatches', () => {
   });
 
   it('matches on description only', () => {
-    expect(itemMatches({ headline: 'Topic', description: 'about rust' }, 'rust')).toBe(true);
+    expect(itemMatches({ headline: 'Item', description: 'about rust' }, 'rust')).toBe(true);
   });
 
   it('matches when both headline and description match', () => {
@@ -110,15 +110,15 @@ describe('itemMatches', () => {
   });
 
   it('does not match when neither headline nor description contain the term', () => {
-    expect(itemMatches({ headline: 'Topic', description: 'about go' }, 'rust')).toBe(false);
+    expect(itemMatches({ headline: 'Item', description: 'about go' }, 'rust')).toBe(false);
   });
 
   it('handles a null description', () => {
-    expect(itemMatches({ headline: 'Topic', description: null }, 'rust')).toBe(false);
+    expect(itemMatches({ headline: 'Item', description: null }, 'rust')).toBe(false);
   });
 
   it('a term that normalizes to empty matches every item', () => {
-    expect(itemMatches({ headline: 'Topic', description: null }, '-')).toBe(true);
+    expect(itemMatches({ headline: 'Item', description: null }, '-')).toBe(true);
   });
 });
 

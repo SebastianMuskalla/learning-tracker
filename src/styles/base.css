@@ -25,7 +25,7 @@
   --complete-tint: #3a6b52;
   --discarded-tint: #a4392f;
 
-  --drawer-width: min(100vw, 40rem);
+  --detail-view-width: min(100vw, 40rem);
 
   --search-highlight: light-dark(rgba(250, 204, 21, 0.55), rgba(250, 204, 21, 0.35));
 
@@ -65,13 +65,13 @@
 
 @media (min-width: 1300px) {
   :root {
-    --drawer-width: min(100vw, 48rem);
+    --detail-view-width: min(100vw, 48rem);
   }
 }
 
 @media (min-width: 1700px) {
   :root {
-    --drawer-width: min(100vw, 88rem);
+    --detail-view-width: min(100vw, 88rem);
   }
 }
 
@@ -248,7 +248,7 @@ mark.search-hit {
   min-height: 100vh;
 }
 
-/* Keyword links between topics (see src/links/linkDom.ts). These live here, not in a component's
+/* Keyword links between items (see src/keywords/linkDom.ts). These live here, not in a component's
  * scoped styles, because the links are added directly to `v-html` content. They use the text
  * color, not the link color, with a dashed underline. */
 .keyword-link {

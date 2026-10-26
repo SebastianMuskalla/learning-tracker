@@ -1,86 +1,91 @@
 # Learning Tracker
 
-Learning Tracker is a single-page web app. You use it to track learning topics.
-Each topic moves through four states: **New**, **WIP** (work in progress),
-**Complete**, and **Discarded**.
+Learning Tracker is a single-page web app.
+You use the app to track items that you want to learn.
+Each item has exactly one of four statuses:
+**New**, **WIP** (work in progress), **Complete**, or **Discarded**.
 
-The app stores your topics in one Markdown file, `learning.md`. This file
-lives in a private GitHub repository. The app reads and writes the file
-through the GitHub API. A quiet moment after you stop making changes
-becomes one commit; see "Saving and conflicts" below.
+The app stores your items in one Markdown file, `learning.md`.
+This file is in a private GitHub repository.
+The app reads and saves the file through the GitHub API.
+The app saves each batch of changes as one commit.
 
-The app has no backend server. It runs only in your browser. You host it as
-a static site on GitHub Pages.
+The app has no backend server.
+It runs only in your browser.
+You host it as a static site on GitHub Pages.
 
 ## How data and access work
 
 The app uses two GitHub repositories:
 
-1. **The app repository.** This holds the app's code. GitHub Pages serves it
-   as a public website. It has no user data in it.
-2. **The data repository.** This holds your `learning.md` file. You make
-   this repository **private**.
+1. **The app repository.**
+   This holds the code of the app.
+   GitHub Pages serves the app from this repository as a public website.
+   The app repository has no user data in it.
+2. **The data repository.**
+   This holds your `learning.md` file.
+   You make this repository **private**.
 
-You do not log in with your GitHub account. Instead, you create a
-**fine-grained personal access token** (a "token" from here on). You give
-this token access to the data repository only. You paste the token into the
-app once. The app then uses the token to talk to the GitHub API.
+You do not sign in with your GitHub account.
+Instead, you create a **fine-grained personal access token** (a "token" from here on).
+You give this token access to the data repository only.
+You paste the token into the app once.
+The app then uses the token for each request to the GitHub API.
 
-The website itself is public. Only someone with your token can read or
-write your data.
+The website is public.
+Only a person with your token can read or write your data.
 
-## Step 1: Create the data repository
+## Setup
 
-1. On GitHub, create a new repository. Use a name such as `learning-data`.
+### Step 1: Create the data repository
+
+1. On GitHub, create a new repository, for example `learning-data`.
 2. Set its visibility to **Private**.
-3. Add a file named `learning.md` to it. An empty file is fine. If you skip
-   this step, the app offers to create the file for you on first run.
 
-## Step 2: Create the fine-grained token
+### Step 2: Create the fine-grained token
 
-The app needs a token with narrow, specific access. Follow these steps
-exactly. Do not grant more access than listed here.
+The app needs a token with narrow access.
+Follow these steps exactly.
+Do not grant more access than this list gives.
 
-1. Go to **github.com → Settings → Developer settings → Personal access
-   tokens → Fine-grained tokens**.
+1. Go to **github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens**.
 2. Click **Generate new token**.
 3. Fill in the form:
 
-   | Field             | Value                                                                           |
-   | ----------------- | ------------------------------------------------------------------------------- |
-   | Token name        | Any name you like, e.g. `learning-tracker`                                      |
-   | Expiration        | The longest option GitHub offers (up to 1 year)                                 |
-   | Resource owner    | Your GitHub account (or the organization that owns the data repository)         |
-   | Repository access | **Only select repositories** → choose the data repository, e.g. `learning-data` |
+   | Field             | Value                                                                                  |
+   | ----------------- | -------------------------------------------------------------------------------------- |
+   | Token name        | A name that you choose, for example `learning-tracker`                                 |
+   | Expiration        | The longest option that GitHub offers                                                  |
+   | Resource owner    | Your GitHub account, or the organization that owns the data repository                 |
+   | Repository access | **Only select repositories** → select the data repository, for example `learning-data` |
 
 4. Open the **Permissions** section and set **Repository permissions**:
 
-   | Permission                                                                                            | Setting                                                       |
-   | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-   | Contents                                                                                              | **Read and write**                                            |
-   | Metadata                                                                                              | Read-only (GitHub sets this on its own; you cannot change it) |
-   | Everything else (Actions, Administration, Issues, Pages, Pull requests, Secrets, Webhooks, and so on) | **No access**                                                 |
+   | Permission                                                                                | Setting                            |
+   | ----------------------------------------------------------------------------------------- | ---------------------------------- |
+   | Contents                                                                                  | **Read and write**                 |
+   | Metadata                                                                                  | Read-only. GitHub sets this value. |
+   | Each other permission (for example Actions, Administration, Issues, Pages, Pull requests) | **No access**                      |
 
-5. Leave **Account permissions** untouched. Every item there must stay at
-   **No access**. The app never needs them.
+5. Do not change **Account permissions**. Each item there stays at **No access**.
 6. Click **Generate token**.
-7. Copy the token now. GitHub shows it only this one time.
+7. Copy the token now.
+   GitHub shows the token only once.
 
-This token can read and write one file in one repository. It cannot do
-anything else on your GitHub account.
+This token can read and write the files of one repository.
+The token has no other access to your GitHub account.
 
-**If the token stops working:** a token can expire, or you can revoke it.
-When that happens, the app's next request gets a 401 (Unauthorized) error.
-The app then shows the setup screen again with a message that explains why.
-Paste in a new token to continue. The same happens with a 403 (Forbidden)
-error, for example when the token has only read access to Contents. Changes
-that were not saved yet are kept, and the app saves them with the new token.
+**If the token stops working:**
+A token can expire, or you can revoke it.
+Then the app shows the setup screen again, with a message that tells you the cause.
+Paste a new token to continue.
+The app keeps the changes that are not saved yet and saves them with the new token.
 
-## Step 3: Deploy the app to GitHub Pages
+### Step 3: Deploy the app to GitHub Pages
 
-1. Create a new **public** GitHub repository for the app's code, e.g.
-   `learning-tracker`. (GitHub Pages on a free account requires a public
-   repository. This is safe: the app repository holds no user data.)
+1. Create a new **public** GitHub repository for the code of the app, for example `learning-tracker`.
+   GitHub Pages on a free account requires a public repository.
+   This is safe, because the app repository holds no user data.
 2. Push this project to that repository:
 
    ```sh
@@ -88,678 +93,185 @@ that were not saved yet are kept, and the app saves them with the new token.
    git push -u origin main
    ```
 
-3. On GitHub, open the app repository's **Settings → Pages**. Under
-   **Build and deployment**, set **Source** to **GitHub Actions**. You only
-   do this once.
-4. Push to the `main` branch (or merge a pull request into it). This
-   triggers the `deploy.yml` workflow. The workflow builds the app and
-   publishes it to GitHub Pages automatically. No further manual steps are
-   needed after this.
-5. Open the repository's **Actions** tab to watch the workflow run.
-6. When the workflow finishes, find your site's URL under **Settings →
-   Pages**. It looks like `https://<you>.github.io/learning-tracker/`.
+3. On GitHub, open **Settings → Pages** of the app repository.
+   Under **Build and deployment**, set **Source** to **GitHub Actions**.
+   You do this only once.
+4. Push to the `main` branch.
+   Each push starts the `deploy.yml` workflow.
+   The workflow builds the app and publishes it to GitHub Pages.
+5. Open the **Actions** tab of the repository to watch the workflow run.
+6. When the workflow is done, find the URL of your site under **Settings → Pages**,
+   for example `https://<you>.github.io/learning-tracker/`.
 
-**About the base path:** the app expects to be served from `/learning-tracker/`
-(see `vite.config.ts`). If you name the app repository something else, tell
-the build about it, using either option:
+**About the base path:**
+The build serves the app from `/learning-tracker/` (see `vite.config.ts`).
+If your app repository has a different name, tell the build in one of two ways:
 
-- In the repository's **Settings → Secrets and variables → Actions →
-  Variables**, add a variable named `VITE_BASE` with the value
-  `/your-repo-name/`. The `deploy.yml` workflow already reads this variable
-  and passes it to the build — no other file needs to change.
-- Or, edit the default value directly in `vite.config.ts`.
+- In **Settings → Secrets and variables → Actions → Variables** of the repository,
+  add a variable named `VITE_BASE` with the value `/your-repo-name/`.
+  The `deploy.yml` workflow reads this variable and passes it to the build.
+  No file needs to change.
+- Or, change the default value in `vite.config.ts`.
 
-## Step 4: Connect the app to your data
+### Step 4: Connect the app to your data
 
 1. Open the Pages URL from Step 3.
 2. The app shows a setup screen. Fill in:
-   - **Owner**: your GitHub username (or organization name)
-   - **Repository**: the data repository's name, e.g. `learning-data`
-   - **Branch**: usually `main`
-   - **Path**: usually `learning.md`
+   - **Owner**: your GitHub user name, or the name of the organization
+   - **Repository**: the name of the data repository, for example `learning-data`
+   - **Branch**: the branch of the data repository, for example `main`
+   - **Path**: the path of the file, for example `learning.md`
    - **Personal access token**: the token from Step 2
-3. Click **Test connection**. The app tries to read the file and reports
-   the result.
+3. Click **Test connection**.
+   The app tries to read the file and shows the result.
 4. Click **Save & continue**.
 
-Owner and repository names may contain only letters, digits, `.`, `_`, and
-`-`, as on GitHub.
+The app now loads your items. You can change these settings later on the settings page.
 
-You can change these settings later. If you switch to another repository,
-branch, or file while changes are not saved yet, the app first saves them
-to the old file. If that fails, it stays on the old file and tells you why.
+## Features
 
-The app now loads your topics and is ready to use.
+- **Board.**
+  The board has one section for each status.
+  You add an item with a headline.
+  An item with the status New moves to WIP when you add a description.
+  You can complete, reopen, discard, restore, delete, and reorder items.
+- **Detail view.**
+  Click a card to open the detail view.
+  There you edit the headline and the description.
+  The app saves a field when you leave it.
+- **Rendering.**
+  Descriptions are Markdown.
+  Code blocks with a language name get syntax highlighting.
+- **Search.**
+  Press **Ctrl+F** or **Ctrl+K** to search the headlines and descriptions.
+  The board then shows only the matching items.
+- **Tags.**
+  You create colored tags on the settings page and add them to items.
+  When you activate filter chips, the board shows only the items with the selected tags.
+  The filter chip **Uncategorized** adds the items without a tag.
+- **Keywords.**
+  The app takes keywords from the headlines of Complete items.
+  A keyword in another description becomes a keyword link
+  to the item that explains the keyword.
+- **Saving.**
+  The app saves the changes as one commit when you stop making changes for 800 ms.
+  It retries after a temporary error.
+  When the same item changed on GitHub and in the app,
+  the app asks you which version to keep.
+- **Theme and app install.**
+  The app has a light and a dark theme.
+  A browser such as Chrome can install the app in its own window (as a PWA).
+  The app does not work offline.
+- **Security.**
+  The app sends the token only to `https://api.github.com`,
+  and it sanitizes the rendered Markdown.
 
-## Install as an app
+The specs in `openspec/specs/` describe each feature in detail.
 
-Browsers such as Chrome can install the site as an app (PWA). The app then
-opens in its own window with an icon. `public/manifest.webmanifest` sets the
-name and the icons. The icons `public/icon-192.png` and `public/icon-512.png`
-are square versions of `public/favicon.svg` on a white background. They have
-a safe margin, so round or rounded icon masks do not cut the picture. The app
-has no service worker, so it does not work offline.
+## Glossary
 
-## Theme
+| Term            | Definition                                                                                                       |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| app             | The Learning Tracker web app that runs in the browser.                                                           |
+| app repository  | The public GitHub repository that holds the code of the app. GitHub Pages serves the app from it.                |
+| data repository | The private GitHub repository that holds `learning.md`.                                                          |
+| `learning.md`   | The Markdown file in the data repository that stores the items and the tag definitions.                          |
+| token           | A fine-grained personal access token of GitHub, with access to the data repository only.                         |
+| board           | The main screen of the app. It shows one section for each status.                                                |
+| status          | The stage of an item: New, WIP, Complete, or Discarded.                                                          |
+| section         | The part of the board that shows the items of one status. The board has one section for each status.             |
+| section count   | The number of items next to a section title, or "x of y" while a search or a tag filter is active.               |
+| item            | One thing to learn, with a headline, an optional description, and zero or more tags.                             |
+| headline        | The one-line title of an item.                                                                                   |
+| description     | The Markdown text of an item.                                                                                    |
+| card            | The view of an item on the board: the headline, the tags, and a preview of the description.                      |
+| detail view     | The panel that shows one item and lets the user edit the item.                                                   |
+| header bar      | The bar at the top of the board with the "Item" field and the button for the settings page.                      |
+| settings page   | The page for the connection settings, the theme, and the tags.                                                   |
+| setup screen    | The settings page when the browser stores no connection settings yet, or when GitHub rejected the token.         |
+| conflict dialog | The dialog that shows the local version and the GitHub version of each item and tag that changed in both places. |
+| tag             | A name with a color that the user adds to items.                                                                 |
+| tag chip        | A chip in the detail view that adds one tag to the item or removes the tag from the item.                        |
+| tag dot         | A dot in the tag color on a card. A card shows one tag dot for each tag of the item.                             |
+| filter chip     | A chip below the header bar of the board. An active filter chip limits the board to the matching items.          |
+| tag filter      | The set of active filter chips.                                                                                  |
+| Uncategorized   | The filter chip for the items without a tag. `Uncategorized` is a reserved name and cannot be a tag name.        |
+| keyword         | A term that the app takes from the headline of an item.                                                          |
+| keyword link    | A keyword in a description that opens the target item: the item whose headline gives the keyword.                |
+| save            | One request that sends `learning.md` to GitHub. Each successful save creates one commit.                         |
+| batch           | The changes that one save sends to GitHub.                                                                       |
+| sync status box | The box in the bottom-right corner of the board that shows the save state, for example "Saving…".                |
+| format version  | The number N in the first line `<!-- version:N -->` of `learning.md`.                                            |
+| migration       | A function that changes `learning.md` from one format version to the next.                                       |
+| API             | Application programming interface. The app reads and saves `learning.md` through the GitHub API.                 |
+| ASCII           | American Standard Code for Information Interchange: the 128 basic characters of English text.                    |
+| HTML            | Hypertext Markup Language: the language of web pages.                                                            |
+| HTTP            | Hypertext Transfer Protocol. An HTTP status code such as 401 tells the app the result of a request.              |
+| OLED            | Organic light-emitting diode: a screen type that uses no power for a black pixel.                                |
+| PWA             | Progressive web app: a website that a browser can install as an app.                                             |
+| ULID            | Universally unique lexicographically sortable identifier: the 26-character id of an item.                        |
+| URL             | Uniform resource locator: a web address.                                                                         |
+| UTC             | Coordinated Universal Time: the time zone of each timestamp in `learning.md`.                                    |
+| WIP             | Work in progress: the status of an item that has a description and is neither Complete nor Discarded.            |
 
-The app has a light and a dark design. The dark design uses a pure black
-background, which saves power on OLED screens. On the settings page, in the
-**Theme** section, you pick one of three modes:
-
-- **Device** (the default): the app uses the light or dark design to match
-  your device's setting. If the device states no preference, the app uses
-  the light design.
-- **Light**: always the light design.
-- **Dark**: always the dark design.
-
-Your browser remembers the mode (it is not stored in `learning.md`), so it
-survives a reload but is not shared between devices.
-
-## Collapsing sections
-
-Click a section's headline (**New**, **WIP**, **Complete**, or
-**Discarded**) to collapse it. A collapsed section shows only its title and
-its item count, so it takes very little vertical space. Click the headline
-again to expand it. This also works while a search or a tag filter is
-active; the count then reads "x of y" as usual.
-
-Which sections are collapsed is not saved anywhere. After a reload, all
-sections are expanded again.
-
-## Code in descriptions
-
-Descriptions are Markdown. In an item's detail view, a code block is shown
-in a box with a slightly tinted background. To get syntax highlighting, name
-the language after the opening fence:
-
-````md
-```python
-print("hello")
-```
-````
-
-The box then shows the language's name at the top (e.g. `ts` shows as
-"TypeScript"), and the code is colored. The colors match the light or dark
-theme. About 35 common languages are supported, e.g. JavaScript, TypeScript,
-Python, Java, C, C++, C#, Go, Rust, Kotlin, Swift, SQL, Bash, JSON, YAML,
-HTML/XML, and CSS (the "common" set of
-[highlight.js](https://highlightjs.org/)).
-
-- A code block without a language gets the box, but no label and no colors.
-  The app does not guess the language.
-- A code block with a language that is not supported gets the box and the
-  label, but no colors.
-- The card previews on the board show code as plain text, without a box.
-
-## Editing in the detail view
-
-Click a card (or move to it with **Tab** and press **Enter** or **Space**)
-to open its detail view. The headline and the description are saved when
-you leave the field, press **Ctrl+S** (**Cmd+S** on macOS), click **Send**,
-close the detail view, or open another item. A field that you did not
-change creates no commit.
-
-If an open item changes while you edit it (for example, because a change
-from GitHub was merged in), the field follows the new value as long as you
-have not typed anything. If you have, the app keeps your text and shows
-"This description changed on GitHub" with two buttons: **Use theirs**
-replaces your text with the new value, **Keep mine** saves your text.
-
-## Search
-
-A floating search bar sits in the bottom-left corner of the board, next to
-the sync status box. Press **Ctrl+F** or **Ctrl+K** (**Cmd** on macOS) to
-jump to it from anywhere, including while editing a description; press the
-same keys again while it already has focus to fall back to the browser's own
-shortcut.
-
-An item matches when the search term appears in its headline or its
-description, ignoring case and ignoring spaces, line breaks, and punctuation
-(so `some text` also matches `Some Text`, `sometext`, and `some-text`).
-Matching text is highlighted in the list and in the open item's detail view.
-While the search bar is not empty, it shows how many items match out of the
-total, an X button to clear it, and only matching items appear on the board.
-Reordering by drag-and-drop is paused while a search is active, since the
-positions on screen no longer line up with the full, unfiltered list.
-
-A card's description preview is clipped to a few lines; if a description
-matches the search only further down, or only in a link's target rather
-than its visible text, the card shows a short note that it still matches, so
-you know to open it.
-
-## Keyword links
-
-Many topics explain a term or an acronym, for example "OWASP (Open Worldwide
-Application Security Project)". When a **Complete** topic's headline gives a
-keyword, and this keyword occurs in the description of a different topic, the
-detail view shows the keyword with a dashed underline. You do not keep a
-keyword list by hand: the app gets the keywords from the headlines.
-
-- Move the pointer onto a keyword link (or move to it with **Tab**). A
-  tooltip shows the target's headline and the start of its description.
-- Click the link (or press **Enter** or **Space**). The detail view then shows
-  the target topic. The search and the tag filter do not change, also if
-  they hide the target on the board. On a touch screen, a tap opens the
-  target at once.
-
-Links appear only in the rendered description of the detail view (the
-read-only view and the live preview). They do not appear on the cards, in
-the Markdown text box, in code, or in an existing link. A topic never links
-to itself. Keywords are computed when the app runs. They are not stored in
-`learning.md`.
-
-### How the app gets the keywords from a headline
-
-1. It removes each group in parentheses, with its content (also nested
-   groups). `OWASP (Open Worldwide Application Security Project)` gives
-   `OWASP`.
-2. It cuts the headline at the first colon that has a space after it (or is
-   at the end). `Risk: Risk assessment, Risk handling` gives `Risk`. A colon
-   without a space after it does not cut: `std::vector` stays.
-3. It splits the rest at each `,` and `;`. `CI, CD` gives `CI` and `CD`. A `/`
-   does not split: `CI/CD` is one keyword.
-4. It drops a part that has fewer than 2 characters (spaces are not counted),
-   a part with no letter or digit (`++`), and a part with a parenthesis
-   without a partner (`Foo (bar`).
-5. It drops a part that is the same as an earlier part of the same headline
-   (see "the same keyword" below).
-
-The detail view shows the keywords of the topic below the headline, as
-"Linked as:". This list follows the headline while you type.
-
-### How a keyword matches
-
-- **Case.** A keyword with an upper-case letter inside a word (`OWASP`,
-  `CI/CD`, `GitHub`, `iOS`) matches exactly as written, or in Title case
-  (`Owasp`, `Github`). All other keywords (`Docker`, `Risk assessment`) match
-  in any case.
-- **Short keywords.** A keyword with exactly 2 characters (`AI`, `IT`, `S3`,
-  `C#`, `Go`) matches only exactly as written. So `IT` does not match "It",
-  and `Go` does not match "go".
-- **Spaces and hyphens.** A space or a hyphen in a keyword matches spaces (also
-  a line break), one hyphen, or nothing. So `Risk assessment` matches
-  "risk-assessment" and "RiskAssessment". Other characters, such as the `/` in
-  `CI/CD`, must match exactly.
-- **Plurals.** A keyword also matches with `s` or `es` directly after it, in
-  lower case only: `API` matches "APIs" but not "APIS". `CD` matches "CDs".
-- **Word edges.** A letter or a digit directly before or after the match stops
-  it. Other characters do not: `OWASP` matches "OWASP-based", "OWASP's", and
-  "pre-OWASP-era", but not "OWASPX". `C#` does not match "C#5".
-- **Overlaps.** The longest match wins. For the same length, the match that
-  starts first wins, and then the match without a plural suffix. So with the
-  topics `Risk` and `Risks`, the text "Risks" links to `Risks`.
-
-### The same keyword in two topics
-
-Two keywords are "the same" when they are equal after the app ignores case,
-spaces, and hyphens (`Risk assessment` and `risk-assessment`). If two Complete
-topics give the same keyword, the app links this keyword nowhere. The
-"Linked as:" list of both topics shows the keyword with a warning: "Also used
-by "…" — not linked." A topic that is not Complete shows this warning too,
-so you see the problem before you complete it. Change one of the headlines
-to fix it. `Risk` and `Risks` are not the same.
-
-### Limits
-
-- Only regular plurals match. `Policy` does not match "Policies".
-- A keyword without a space or a hyphen does not match a text with one:
-  `XRay` does not match "X-Ray". Write the keyword as `X-Ray` to match all
-  forms.
-- A keyword does not match across formatting. `Risk assessment` does not
-  match "Risk _assessment_".
-- A headline that is a sentence gives poor keywords. "Why, how and when to use
-  Docker" gives "Why" and "how and when to use Docker". Check the "Linked
-  as:" list and change the headline if necessary.
-- A Complete topic with a common word as its keyword (for example "Risk")
-  links this word in every other description.
-
-## Tags
-
-A tag is one word (letters, digits, `_`, or `-`) and one of 16 pastel colors.
-Each topic can have any number of tags, including none.
-
-You create, recolor, and delete tags on the settings page, in the **Tags**
-section. Creating a tag does not change any topic. Deleting a tag removes
-it from every topic that has it, after you confirm; the confirmation shows
-how many topics are affected. A tag's color can be changed at any time.
-
-In a topic's detail view, tags appear as chips above the description. A
-chip in full color is on the topic; a grayed-out chip is not. Click a chip
-to add or remove that tag.
-
-At the top of the board, below the header bar, all tags appear as chips.
-Click a chip to make it active (highlighted) or inactive (its normal look);
-several chips can be active at once. While at least one tag is active, only
-topics with at least one active tag are shown, and each column's count
-reads "x of y" (y is the column's full count, x is how many are shown). The
-same "x of y" style applies while searching, for the same reason. Dragging
-to reorder is paused while a tag filter is active, for the same reason it
-pauses during a search.
-
-Next to the tag chips, the last chip is **Uncategorized**. It has a dark gray
-background. It is a filter for topics that have no tags. It follows the same
-rules as a tag chip: click it to make it active, and it combines with the active
-tag chips with "or" (a topic is shown when it has an active tag, or when it has
-no tags and **Uncategorized** is active). The app shows it only when at least
-one tag exists and at least one topic has no tags. If the last topic without
-tags gets a tag (or is deleted, or all tags are deleted), the chip disappears.
-If it was active, the app turns it off and forgets it. The app does this only
-after it loaded `learning.md` without an error.
-
-The name `Uncategorized` is reserved, ignoring case. You cannot create a tag
-with this name, and the parser rejects a file that has one.
-
-Which tags are active, and if **Uncategorized** is active, is remembered by
-your browser (not stored in `learning.md`), so it survives a reload but is not shared between devices
-or with anyone you share the repository with.
+The word "glossary" names only this section. The app feature that links terms is "keywords".
 
 ## Development
 
-Use Node 24 (see `.nvmrc`; with nvm: `nvm use`) and pnpm.
+Use Node 24 and pnpm.
+`.nvmrc` names the Node version, so with nvm you run `nvm use`.
 
 ```sh
 pnpm install
-pnpm dev             # local dev server
+pnpm dev             # local development server
 pnpm format          # prettier --write .
-pnpm format:check    # prettier --check . (CI runs this)
-pnpm lint            # eslint --max-warnings 0
-pnpm lint:fix        # eslint --fix
-pnpm typecheck       # vue-tsc -b --noEmit
-pnpm test            # vitest run
-pnpm test:watch      # vitest in watch mode
-pnpm test:coverage   # vitest run --coverage (fails below the thresholds in vite.config.ts)
-pnpm build           # production build (also runs vue-tsc -b)
+pnpm lint            # eslint --fix --max-warnings 0
+pnpm test            # vitest run --coverage; fails below the thresholds in vite.config.ts
+pnpm build           # type check with vue-tsc -b, then production build
 pnpm test:e2e        # browser tests against the build; run `pnpm build` first
 ```
 
-`pnpm check` runs all of the above in one go, in this order: `lint:fix`,
-`lint`, `format`, `format:check`, `typecheck`, `test:coverage`, `build`, `test:e2e`.
-It stops at the first step that fails. Run it before you push. It fixes
-lint and formatting problems in your files, so CI runs the separate
-checks instead.
+`pnpm check` runs `lint`, `format`, `test`, `build`, and `test:e2e`.
+Run `pnpm check` before you push.
+`pnpm check` fixes lint and formatting problems in your files, so the deploy workflow runs separate checks that change no file.
 
-Before the first `pnpm test:e2e`, install the browser once:
-`pnpm exec playwright install chromium`. The browser tests (in `e2e/`)
-replace the GitHub API with a fake, so they need no token and no network.
+Before the first `pnpm test:e2e`, install the browser once: `pnpm exec playwright install chromium`. The
+browser tests in `e2e/` replace the GitHub API with a fake, so they need no token and no network.
 
-To run only some unit tests:
+To run one unit test file, or the tests whose name matches a text:
 
 ```sh
-pnpm exec vitest run tests/domain/merge.test.ts   # one test file
-pnpm exec vitest run -t "name of the test"        # tests whose name matches
+pnpm exec vitest run tests/domain/merge.test.ts
+pnpm exec vitest run -t "name of the test"
 ```
 
-The unit tests run without a DOM by default. A test file that needs one
-starts with the line `// @vitest-environment jsdom`.
+The unit tests run without a document object model (DOM). A test file that needs a DOM starts with the line
+`// @vitest-environment jsdom`.
 
-The parser test fixtures in `tests/format/fixtures/` must keep their exact
-bytes. Prettier skips them on purpose (see `.prettierignore`). Do not
-reformat them.
+The editor settings in `.vscode/` format each file with Prettier when you save it.
+To make `git blame` skip the commits that only changed formatting,
+run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once.
 
-`pnpm install` also installs a git pre-commit hook (`simple-git-hooks` and
-`lint-staged`). It runs ESLint and Prettier on the staged files.
+`.github/workflows/deploy.yml` is the only workflow.
+It runs on each push to `main`:
+the format check, lint, the tests with coverage, the build with the type check, and the browser tests.
+Only when each check passes, the workflow builds the app again with `VITE_BASE`
+and publishes `dist/` to GitHub Pages.
+A failing check stops the deploy, but it does not stop the push.
 
-The editor settings in `.vscode/` format on save with Prettier. To make
-`git blame` skip the commit that only reformatted the code, run
-`git config blame.ignoreRevsFile .git-blame-ignore-revs` once.
+### Development workflow
 
-`.github/workflows/deploy.yml` is the only workflow. It runs on every push
-to `main`. It runs the format check, lint, typecheck, the tests with
-coverage, the build, and the browser tests. Only when all of them pass, it
-builds the app again with `VITE_BASE` and publishes `dist/` to GitHub Pages
-(see Step 3 above). No workflow runs for a pull request. Thus, a failing check
-stops the deploy, but it does not stop the push. Run `pnpm check` before you
-push. Dependabot (`.github/dependabot.yml`) opens update pull requests every
-week. Their checks run only after you merge them into `main`.
+This project uses spec-driven development with Claude Code and OpenSpec.
+The specs in `openspec/specs/` describe what the app does and why.
+This README is a human-readable overview only.
 
-About two dependencies:
+Each change follows the OpenSpec workflow: Explore (optional), Propose, Apply, Archive.
 
-- **TypeScript** stays on 6.x until `vue-tsc` and `typescript-eslint`
-  support TypeScript 7.
-- **@types/node** stays on the major version that matches the Node version
-  in `.nvmrc`.
-
-**Dev-mode note:** the Content-Security-Policy (CSP) tag in `index.html`
-(see "Security" below) is active in `pnpm dev` too. It blocks two things
-that only happen during local development: Vite's own auto-reload
-connection, and the favicon load over plain `http://`. You will see two
-console warnings about this. They are expected. They do not appear in the
-production build. Because auto-reload is blocked, refresh the page by hand
-after you save a file. This is deliberate. The same strict CSP that
-protects the live app also runs locally. The app does not relax it for
-convenience.
-
-## Architecture
-
-The code is split into layers. Each layer uses only the layers above it in
-this table.
-
-| Folder                                      | What it holds                                                                                                                                 |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/domain/`                               | The data model (`types.ts`), validated factories for the branded types, the commands (`applyCommand`), and the 3-way `merge`. No I/O.         |
-| `src/format/`                               | `parse` and `serialize` for `learning.md`, the commit messages, and `version.ts` (the format version). `migrations/` upgrades old files.      |
-| `src/github/`                               | The GitHub Contents API client. It returns a `Result`, never throws for an HTTP error, and checks the shape of every response.                |
-| `src/store/`                                | Pinia stores. `board.ts` holds the board and runs every read and write; `settings.ts`, `theme.ts`, `tagFilter.ts`, and `search.ts` are small. |
-| `src/composables/`                          | `useSyncLifecycle`: connects the board store to page events (tab hidden, page closing, back online, other tabs).                              |
-| `src/components/`                           | The Vue components.                                                                                                                           |
-| `src/markdown/`, `src/search/`, `src/tags/` | Markdown rendering, search matching and highlighting, tag helpers.                                                                            |
-| `src/links/`                                | Keyword links: get keywords from headlines, find them in a text, and add the links to the rendered description.                               |
-
-Two patterns are used everywhere:
-
-- **Branded types.** A value such as `Headline` or `ItemId` is a `string`
-  with a type-only brand. The only way to get one is a factory in
-  `src/domain/factories.ts`, which validates the value. So a `Headline` is
-  always valid.
-- **`Result` instead of exceptions.** Functions that can fail return
-  `{ ok: true, value }` or `{ ok: false, error }` (`src/domain/result.ts`).
-  The error types are unions, and a `switch` over them is checked for
-  completeness by ESLint.
-
-The write path:
-
-```
-UI event
-  → boardStore.applyAndSync(command)
-      applyCommand(board, command)            the board changes at once
-      the command is added to pendingCommands
-  → debounce (800 ms quiet, at most 5 s or 10 commands)
-  → queue: flushPending()
-      pendingCommands → inFlightCommands
-      serialize → parse again → compare       the round-trip check
-      putFile(text, sha)
-        ok        → confirmed board = written board
-        409       → getFile → merge(base, ours, theirs) → putFile again
-        temporary → keep the commands, retry later
-        permanent → drop the in-flight commands
-  → rebaseLocal: board = confirmed board + pendingCommands
-```
-
-The board that you see is always the confirmed board (what GitHub has at
-`sha`) plus the commands that are not saved yet. When the confirmed board
-changes, the store applies those commands again on top of it. So a change
-you make while a request is in flight is never lost.
-
-To add a new command:
-
-1. Add it to the `Command` type and handle it in `applyCommand`
-   (`src/domain/commands.ts`). If it creates something new with a random
-   id, let the command carry the id (like `add`), so that applying it again
-   gives the same result.
-2. Add its commit message in `src/format/commitMessage.ts`.
-3. Check that `merge` (`src/domain/merge.ts`) handles the change it makes.
-   If it changes the file format, update `parse`, `serialize`, and the
-   format description below.
-4. Add tests in `tests/domain/`, `tests/format/`, and, for the UI,
-   `tests/components/`.
-5. Call `boardStore.applyAndSync(...)` from the component.
-
-## The `learning.md` file format
-
-### Goals of the file format
-
-- **Goal:** `learning.md` is easy for humans to read. This applies to the
-  raw text and to the rendered view (for example the preview on github.com).
-- **Non-goal:** humans can edit `learning.md` by hand without errors. The
-  syntax is strict. If a hand edit breaks a rule, the app shows a parse
-  error with a line number and writes nothing. It does not try to guess
-  what you meant. We prefer simple code to a parser that accepts many
-  variants.
-- **Rule for the future:** when there is a choice, the format has one way
-  to write a value. A new syntax variant needs a good reason.
-
-You can still open and edit `learning.md` by hand on github.com. Your last
-good version is always in the git history, so a mistake does not lose data.
-
-### Grammar
-
-```
-file        := header tagdef* blank* section('New') section('WIP') section('Complete') section('Discarded')
-header      := '<!-- version:5 -->' NL blank* '# Learning' NL blank*
-tagdef      := '<!-- tag:' NAME ' color:#' HEX6LOWER ' -->' NL blank*
-section(S)  := '## ' S NL blank* item(S)*
-item(S)     := '### ' headline NL
-               meta(S) NL
-               tagline*
-               fence(S)
-               blank*
-fence(New)       := nothing
-fence(WIP)       := fence
-fence(Complete)  := fence
-fence(Discarded) := fence?
-meta(New)       := '<!-- id:' ULID ' created:' TIMESTAMP ' -->'
-meta(WIP)       := '<!-- id:' ULID ' created:' TIMESTAMP ' -->'
-meta(Complete)  := '<!-- id:' ULID ' created:' TIMESTAMP ' completed:' TIMESTAMP ' -->'
-meta(Discarded) := '<!-- id:' ULID ' created:' TIMESTAMP ' discarded:' TIMESTAMP ' -->'
-tagline     := '- ' NAME NL
-TIMESTAMP   := YYYY '-' MM '-' DD 'T' hh ':' mm ':' ss 'Z'   (UTC)
-fence       := '`'{N} 'markdown' NL rawline+ '`'{N} NL         (N is 3 or more; at least one rawline is not blank)
-rawline     := any line that does not close the fence
-blank       := an empty line (outside fences)
-```
-
-An example:
-
-````md
-### Application Security Posture Management (ASPM)
-
-<!-- id:01M3VXEYY3V9M2BMAMMK12GMBS created:2026-10-01T14:21:29Z -->
-
-- DevOps
-- Security
-
-```markdown
-Optional description
-```
-````
-
-Rules:
-
-- Keep the `<!-- version:N -->` line and the `# Learning` line exactly as
-  the app wrote them. Never change the version number.
-- Keep all four sections, in this order: New, WIP, Complete, Discarded.
-  Keep every section even when it is empty.
-- A topic's section depends on its status and its description. **New**: no
-  description. **WIP**: a description. **Complete**: a `completed:`
-  timestamp and a description. **Discarded**: a `discarded:` timestamp, and
-  a description if you like. Each section has exactly one metadata form
-  (see the grammar). A topic in the wrong section, or with the wrong
-  metadata for its section, is an error.
-- A `TIMESTAMP` is the full UTC form, `2026-09-16T14:32:07Z`. A plain date
-  is an error.
-- A tag is one line, `- NAME` (a hyphen, one space, the name, nothing
-  after it). The tag lines come directly after the metadata line, and the
-  fence (if there is one) directly after the tag lines. No blank lines are
-  between them. `*` and `+` are not list markers here. A line `- NAME`
-  inside a description is plain text.
-- A tag `NAME` is letters, digits, `_`, or `-`, 1 to 32 characters (Unicode
-  letters and digits are allowed, so `Übung` and `日本語` are valid names).
-  No spaces, commas, or `<!--`. The name `Uncategorized` is reserved and
-  not allowed, ignoring case (it is the name of a filter chip).
-- Every tag that a topic lists must be defined by a `tagdef` line above the
-  first section, with exactly the same upper and lower case. A tag that is
-  not defined is an error, not a silent drop. Tag definitions must be
-  unique, ignoring case. A tag color is `#` and 6 lower-case hex digits.
-- A file with no `tagdef` lines and no tag lines is a valid file. Every
-  topic in it has no tags.
-- A description is written inside a code fence. The opening line is N
-  backticks and the word `markdown` (N is 3 or more). The closing line is
-  exactly N backticks. Inside, write anything you want: headings, other
-  comments, and blank lines are all plain text. GitHub shows the fence as a
-  code box, so the headings in a description do not change the outline of
-  the file.
-- The tag of the fence must be `markdown`. The app does not accept `md` or
-  no tag.
-- A fence must not be empty. If a topic has no description, write no fence.
-- The fence must have more backticks than the longest run of backticks at
-  the start of any line in the description (after at most 3 spaces). The
-  app writes the shortest fence that follows this rule. A longer fence that
-  you write by hand is valid, but the next save makes it shorter.
-- The closing line must be exactly N backticks. A line with more backticks,
-  with indentation, or with trailing spaces also closes the fence on
-  GitHub, so the app reports it as an error.
-- If your fence is too short, an inner code fence closes the description
-  too early. The rest of the text then causes a parse error with a line
-  number. Make the outer fence longer to fix it.
-- Write each headline on a single line. Do not put `<!--` in a headline.
-- Two topics cannot share the same `id`.
-- The app always writes line endings as `\n`. It also accepts `\r\n` when
-  it reads a file, and converts them.
-
-### Format versions
-
-The first line of the file is `<!-- version:N -->`. `N` is the format
-version. The app knows one version (`CURRENT_VERSION` in
-`src/format/version.ts`).
-
-- If the file is older, the app upgrades it. It applies the migrations one
-  after the other, on the text, and writes the result as **one** commit named
-  "Upgrade learning.md from format vA to vB". This is also true when the
-  app skips several versions. Changes that were not saved yet follow in a
-  separate commit. While this runs, the corner shows "Upgrading learning.md…".
-- If the file is newer than the app, the app blocks all writes and shows a
-  **Reload** button. Reload the page to get the newest version of the app.
-- If an upgrade fails (for example, because of a hand edit), the app shows the
-  error and writes nothing.
-
-Each upgrade is safe with many devices at the same time: a write is based
-on the version of the file that the app read, and GitHub rejects it if the
-file changed. Then the app reads the file again.
-
-| Version | Change                                                                                                                                                                           | First commit on `main` | Last commit on `main` |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | --------------------- |
-| 0       | No version line. Only the empty file. Migrated to 1.                                                                                                                             | –                      | –                     |
-| 1       | First format. The comment `<!-- learning-tracker: v1 — … -->` below the title marks it.                                                                                          | `5e6ee92`              | `21ba6fe`             |
-| 2       | The line `<!-- version:2 -->` above the title replaces the comment. Nothing else changes.                                                                                        | `66e7eb6`              | `88bd1c2`             |
-| 3       | Each description is in a `markdown` code fence. The `<!-- desc -->` markers are removed.                                                                                         | `e87d6a9`              | `e87d6a9`             |
-| 4       | Tags are a `- NAME` list below the metadata line. Plain dates become full timestamps, colors become lower case, empty fences are removed, topics in the wrong section are moved. | `bd31a27`              | (fill after merge)    |
-| 5       | The tag name `Uncategorized` is reserved, ignoring case. Such a tag is removed from the tag list and from every topic.                                                           | (fill after merge)     | current               |
-
-"First commit" is the first commit whose app writes this version. Fill in
-the hashes of a new version in a small commit after the merge. This command
-finds the first commit:
-
-```sh
-git log --reverse --format=%h -S "CURRENT_VERSION = <N>" -- src/format/version.ts | head -1
-```
-
-The last commit of the previous version is the parent of that commit. Inside
-one version, later commits can add optional syntax (for example tags). An
-older app rejects a file that uses it and blocks writes.
-
-To add a format version:
-
-1. Add the migration in `src/format/migrations/` and register it in
-   `index.ts`. A migration is a pure function from text to text. It must be
-   self-contained: it must not import the parser, the serializer, or
-   `version.ts` (ESLint checks this), because a released migration never
-   changes.
-2. Increase `CURRENT_VERSION`.
-3. Copy the current valid fixtures to
-   `tests/format/migrations/fixtures/v<old>/`, and add the expected output
-   of the migration as `<name>.expected.md`. These fixtures are frozen.
-4. Change `parse`, `serialize`, and the format description.
-5. Add the row to the version table.
-
-Bump the version only when the new app cannot read a file that the previous
-app wrote. New optional syntax does not need a bump.
-
-Before every save, the app reads back what it is about to write and
-compares it with its own in-memory data. If the two do not match exactly,
-the app stops and saves nothing. This check runs on every save (also on
-the last, best-effort save when the page closes, and on a merged save), and a
-dedicated test (`tests/format/roundtrip.property.test.ts`) checks it against
-10,000 generated examples, including deliberately awkward ones (headings,
-code fences, and Unicode text inside descriptions).
-
-The file can fail to parse. A hand-edit mistake is one common cause. When
-this happens, the app shows the error with a line number. It links to the
-file on github.com. It blocks all further writes until you fix the file.
-Your last good version is always in the repository's git history.
-
-Two more limits:
-
-- The file must be UTF-8 text. If it is not (for example, after it was
-  saved as Latin-1 by hand), the app shows an error and blocks all writes.
-  It does not replace the characters it cannot read, because the next save
-  would then destroy them.
-- The file can be at most 1 MB. The GitHub Contents API does not return the
-  content of larger files. The app then shows an error.
-
-## Saving and conflicts
-
-The app does not send one commit per click. It waits about a second after
-your last change, then writes everything from that burst as one commit. A
-long burst of changes, or ten changes in a row, forces a write sooner, so
-nothing waits too long. While a write is pending or in progress, the bottom
-corner shows "Unsaved changes…" or "Saving…". You can keep working while a
-write runs: changes you make in the meantime are kept and go into the next
-commit.
-
-When you switch to another tab, the app writes pending changes right away.
-When the page closes, it sends them one last time, as a best effort (only
-if they fit into the 64 KB that browsers allow for this kind of request).
-If you try to close the tab (or reload it) while something is not saved
-yet, the browser asks you to confirm. This also applies while the settings
-page is open, while the conflict dialog is open, and while you have typed
-into a field of the detail view that was not saved yet.
-
-If a save fails for a reason that can pass (no network, a GitHub server
-error, a rate limit), your changes stay on the board. The corner shows
-"Not saved — will retry", and the app tries again after 2, 5, 15, and then
-every 60 seconds, and at once when the browser is back online. A long rate
-limit shows the time of the next try. Only an error that cannot pass (for
-example, the branch does not exist) undoes the changes of that save.
-
-Sometimes a write is rejected because the file changed on GitHub in the
-meantime. Most of the time this is not a real conflict — for example, GitHub
-can briefly answer a read with an older version of the file right after a
-write, or two changes to different topics do not actually clash. The app
-reads the current file, and:
-
-- if it turns out nothing you care about actually changed, it retries the
-  write on its own;
-- if the changes are to different topics (or the same topic changed the
-  same way twice), it combines both automatically and retries;
-- only when the _same_ topic was changed differently in both places does it
-  ask you. It then shows your version and GitHub's version side by side, and
-  you pick which one to keep — the other is discarded. **Keep GitHub's
-  version** reads the file again, so you always get the newest version.
-  Changes you make while the dialog is open wait, and are saved after your
-  choice.
-
-Refreshing the page, or switching back to the tab after a while, re-reads
-`learning.md` from GitHub. This is skipped while changes are not saved yet
-and while the conflict dialog is open, so a refresh never throws away your
-work. If a change no longer fits the newest version (for example, you
-renamed a topic that was deleted on GitHub), the app drops it and tells you.
-
-If the app is open in several tabs of the same browser, a tab that saves
-tells the other tabs, and they read the new version.
-
-## Security
-
-- The token is sent only to `https://api.github.com`. A
-  Content-Security-Policy tag in `index.html` enforces this in the
-  browser; the app cannot send it anywhere else, by accident or otherwise.
-- The token is never written into the URL, into the app's code, or into
-  any commit.
-- All Markdown you write is rendered with `markdown-it` (with raw HTML
-  turned off) and then cleaned with DOMPurify before it is shown. This
-  guards against a description that contains a script trying to run in
-  your browser.
-- Links inside a description open with `rel="noopener noreferrer"` and in
-  a new tab.
-- The token is remembered in the browser's `localStorage`, so it survives
-  a reload. Someone can steal your token from a device. If that happens,
-  they get read and write access to one file, in one private repository.
-  They get nothing else. Use the narrow permissions from Step 2.
-- If the browser does not let the app use `localStorage` (some private
-  modes do this), the app still starts. It keeps the token in memory only
-  and tells you; you then enter it again after a reload.
+The project uses trunk-based development without pull requests.
+One change is one commit on `main`.
+After each commit, the project works and `pnpm check` passes.
 
 ## Future Work
 
-- Help users write STE in descriptions or check it
-- AI lookup / fact check
-- Glossary functionality
+- Artificial intelligence (AI) lookup and fact check
+- Merge WIP and New and fix `statusTemp`

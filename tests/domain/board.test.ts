@@ -22,7 +22,7 @@ function activeItem(overrides: Partial<ActiveItem> = {}): ActiveItem {
     id: generateItemId(),
     headline: HEADLINE,
     createdAt: CREATED,
-    status: 'active',
+    statusTemp: 'active',
     description: null,
     tags: [],
     ...overrides,

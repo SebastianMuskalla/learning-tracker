@@ -1,5 +1,5 @@
-// Fuzzy search matching: ignore case, spaces, line breaks, and punctuation between letters.
-// See doc/requirement-2-search.md section 3.1-3.2 for the design.
+// Fuzzy search matching: ignore case and each character that is not a letter or a digit.
+// See "Match rule" and "Ignored characters" in openspec/specs/search/spec.md.
 
 export interface NormalizedText {
   /** Lower-cased, with every character that is not a letter or digit removed. */

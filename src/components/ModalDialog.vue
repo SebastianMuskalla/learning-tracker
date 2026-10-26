@@ -36,7 +36,7 @@ function onCancel(event: Event): void {
 
 function onKeydown(event: KeyboardEvent): void {
   // Escape belongs to this dialog only. Without this, listeners further up (for example the one
-  // that closes the item drawer) would also react to it.
+  // that closes the detail view) would also react to it.
   if (event.key === 'Escape') {
     event.stopPropagation();
     event.preventDefault();

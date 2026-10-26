@@ -2,11 +2,9 @@ import { emptyBoard } from '../../src/domain/board';
 import { applyCommand, type Command } from '../../src/domain/commands';
 import { generateItemId, makeDescription, makeHeadline } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
-import type { Board, ItemId } from '../../src/domain/types';
+import type { Board, ItemId, Status } from '../../src/domain/types';
 
-export type Status = 'new' | 'wip' | 'complete' | 'discarded';
-
-/** Builds a board for the keyword-link tests. Each topic gets the description "About <headline>." */
+/** Builds a board for the keyword-link tests. Each item gets the description "About <headline>." */
 export class BoardBuilder {
   board: Board = emptyBoard();
   readonly ids = new Map<string, ItemId>();
@@ -24,7 +22,7 @@ export class BoardBuilder {
 
   id(headline: string): ItemId {
     const id = this.ids.get(headline);
-    if (id === undefined) throw new Error(`no topic ${headline}`);
+    if (id === undefined) throw new Error(`no item ${headline}`);
     return id;
   }
 

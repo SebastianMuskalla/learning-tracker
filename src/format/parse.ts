@@ -18,7 +18,7 @@ import type {
   IsoTimestamp,
   Item,
   ItemId,
-  Section,
+  Status,
   Tag,
   TagName,
 } from '../domain/types';
@@ -30,7 +30,7 @@ export interface ParseError {
   readonly reason: string;
 }
 
-const SECTION_SEQUENCE: readonly { readonly section: Section; readonly heading: string }[] = [
+const SECTION_SEQUENCE: readonly { readonly section: Status; readonly heading: string }[] = [
   { section: 'new', heading: '## New' },
   { section: 'wip', heading: '## WIP' },
   { section: 'complete', heading: '## Complete' },
@@ -40,13 +40,13 @@ const SECTION_SEQUENCE: readonly { readonly section: Section; readonly heading: 
 const TS = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`;
 const ID = '([0-9A-Za-z]{26})';
 // Each section has exactly one valid metadata form.
-const META_RE: Record<Section, RegExp> = {
+const META_RE: Record<Status, RegExp> = {
   new: new RegExp(`^<!-- id:${ID} created:(${TS}) -->$`),
   wip: new RegExp(`^<!-- id:${ID} created:(${TS}) -->$`),
   complete: new RegExp(`^<!-- id:${ID} created:(${TS}) completed:(${TS}) -->$`),
   discarded: new RegExp(`^<!-- id:${ID} created:(${TS}) discarded:(${TS}) -->$`),
 };
-const SECTION_TITLE: Record<Section, string> = {
+const SECTION_TITLE: Record<Status, string> = {
   new: 'New',
   wip: 'WIP',
   complete: 'Complete',
@@ -248,7 +248,7 @@ function parseTagLines(cursor: Cursor, definedTags: readonly Tag[]): Result<read
 
 function parseItem(
   cursor: Cursor,
-  fileSection: Section,
+  fileSection: Status,
   definedTags: readonly Tag[],
 ): Result<Item, ParseError> {
   const headlineLine = cursor.advance();
@@ -327,7 +327,7 @@ function parseItem(
         id,
         headline,
         createdAt,
-        status: 'discarded',
+        statusTemp: 'discarded',
         description,
         discardedAt: endedAt,
         tags,
@@ -343,7 +343,7 @@ function parseItem(
         id,
         headline,
         createdAt,
-        status: 'complete',
+        statusTemp: 'complete',
         description,
         completedAt: endedAt,
         tags,
@@ -361,7 +361,7 @@ function parseItem(
           reason: 'An item without a description must be under New, not WIP',
         });
       }
-      const item: ActiveItem = { id, headline, createdAt, status: 'active', description, tags };
+      const item: ActiveItem = { id, headline, createdAt, statusTemp: 'active', description, tags };
       return ok(item);
     }
   }
@@ -424,7 +424,7 @@ function parseOptionalDescription(cursor: Cursor): Result<Description | null, Pa
 }
 
 function placeItem(acc: Accumulator, item: Item): void {
-  switch (item.status) {
+  switch (item.statusTemp) {
     case 'active':
       if (item.description === null) {
         acc.new.push(item);

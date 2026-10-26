@@ -24,7 +24,7 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
 </script>
 
 <template>
-  <div v-if="syncStatus !== 'idle' || notice" class="overlay" :class="syncStatus" role="status">
+  <div v-if="syncStatus !== 'idle' || notice" class="sync-status-box" :class="syncStatus" role="status">
     <span v-if="syncStatus !== 'idle'" class="label">{{ STATUS_LABEL[syncStatus] }}</span>
     <span v-if="errorMessage" class="message">{{ errorMessage }}</span>
     <span v-if="notice" class="message">{{ notice }}</span>
@@ -32,7 +32,7 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
 </template>
 
 <style scoped>
-.overlay {
+.sync-status-box {
   /* Pins to the right edge of the floating-bar flex row in BoardView.vue, whether it shares a
    * row with the search bar or wraps onto its own. */
   margin-left: auto;
@@ -53,18 +53,18 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
   color: var(--text-muted);
 }
 
-.overlay.saved .label {
+.sync-status-box.saved .label {
   color: var(--accent);
 }
 
-.overlay.error .label,
-.overlay.conflict .label {
+.sync-status-box.error .label,
+.sync-status-box.conflict .label {
   color: var(--danger);
 }
 
-.overlay.saving .label,
-.overlay.loading .label,
-.overlay.pending .label {
+.sync-status-box.saving .label,
+.sync-status-box.loading .label,
+.sync-status-box.pending .label {
   color: var(--warning);
 }
 

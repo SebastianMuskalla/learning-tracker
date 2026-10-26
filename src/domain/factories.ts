@@ -30,7 +30,7 @@ export function describeValidationError(error: ValidationError): string {
     case 'InvalidIsoTimestamp':
       return `"${error.value}" is not a valid timestamp (expected YYYY-MM-DDTHH:MM:SSZ)`;
     case 'InvalidItemId':
-      return `"${error.value}" is not a valid item id (expected a ULID)`;
+      return `"${error.value}" is not a valid item id (expected an upper-case ULID)`;
     case 'InvalidTagName':
       return `"${error.value}" is not a valid tag name (letters, digits, "_" or "-", up to 32 characters)`;
     case 'ReservedTagName':
@@ -54,8 +54,9 @@ export function generateItemId(): ItemId {
   return nextUlid() as ItemId;
 }
 
+/** Accepts upper-case ULIDs only, so an id has one way to be written. */
 export function makeItemId(value: string): Result<ItemId, ValidationError> {
-  if (!isValidUlid(value)) {
+  if (value !== value.toUpperCase() || !isValidUlid(value)) {
     return err({ type: 'InvalidItemId', value });
   }
   return ok(value as ItemId);

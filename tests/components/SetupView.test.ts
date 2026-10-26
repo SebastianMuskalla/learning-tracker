@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import SetupView from '../../src/components/SetupView.vue';
 import { emptyBoard } from '../../src/domain/board';
 import { applyCommand } from '../../src/domain/commands';
@@ -116,6 +116,66 @@ describe('switching repositories (C5)', () => {
   });
 });
 
+describe('blocked storage', () => {
+  let setItem: MockInstance<Storage['setItem']>;
+
+  afterEach(() => {
+    setItem.mockRestore();
+  });
+
+  it('tells the user to enter the settings again after a reload', async () => {
+    setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    });
+    const wrapper = mountSetup();
+
+    await fieldByLabel(wrapper, 'Personal access token', 'new-token');
+    await wrapper.get('button.primary').trigger('click');
+    await flushPromises();
+
+    expect(useSettingsStore().token).toBe('new-token');
+    expect(useBoardStore().notice).toBe(
+      'The settings could not be saved in this browser; you will need to enter them again after a reload.',
+    );
+    wrapper.unmount();
+  });
+});
+
+describe('connection test', () => {
+  function testButton(wrapper: ReturnType<typeof mountSetup>) {
+    const button = wrapper.findAll('button').find((b) => b.text().includes('Test connection'));
+    if (!button) throw new Error('no Test connection button');
+    return button;
+  }
+
+  it('shows the number of characters that it read', async () => {
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: 'x'.repeat(1200), sha: 's1' } });
+    const wrapper = mountSetup();
+
+    await testButton(wrapper).trigger('click');
+    await flushPromises();
+
+    expect(getFile).toHaveBeenCalledWith(
+      expect.objectContaining({ owner: 'me', repo: 'old-repo', branch: 'main', path: 'learning.md' }),
+    );
+    expect(wrapper.text()).toContain('Connected — read 1200 characters.');
+    wrapper.unmount();
+  });
+
+  it('names each cause of an HTTP 404', async () => {
+    getFile.mockResolvedValueOnce({ ok: false, error: { type: 'NotFound' } });
+    const wrapper = mountSetup();
+
+    await testButton(wrapper).trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      'Connected — the file does not exist yet, or the owner, repository, branch, or token is wrong.',
+    );
+    wrapper.unmount();
+  });
+});
+
 describe('creating a tag', () => {
   it('rejects the reserved name and sends no command', async () => {
     const store = await loadBoard(emptyBoard());
@@ -151,6 +211,13 @@ describe('deleting a tag', () => {
     const dialog = wrapper.get('dialog');
     expect(dialog.attributes('aria-labelledby')).toBe('delete-tag-title');
     expect(dialog.text()).toContain('It is used by 2 items. They will lose this tag.');
+
+    const cancel = dialog.findAll('button').find((b) => b.text().includes('Cancel'));
+    await cancel?.trigger('click');
+
+    expect(wrapper.find('dialog').exists()).toBe(false);
+    expect(useBoardStore().board.tags.map((t) => t.name)).toEqual(['vue']);
+    expect(putFile).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });

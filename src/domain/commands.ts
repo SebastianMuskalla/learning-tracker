@@ -11,7 +11,7 @@ import type {
   Item,
   IsoTimestamp,
   ItemId,
-  Section,
+  Status,
   TagName,
 } from './types';
 
@@ -31,7 +31,7 @@ export type Command =
   | { readonly type: 'restore'; readonly id: ItemId }
   | {
       readonly type: 'reorder';
-      readonly section: Section;
+      readonly section: Status;
       readonly fromIndex: number;
       readonly toIndex: number;
     }
@@ -46,9 +46,9 @@ export type DomainError =
   | { readonly type: 'DuplicateItemId'; readonly id: ItemId }
   | { readonly type: 'ItemNotFound'; readonly id: ItemId }
   | { readonly type: 'CompleteRequiresDescription'; readonly id: ItemId }
-  | { readonly type: 'WrongStatus'; readonly id: ItemId; readonly expected: Item['status'] }
+  | { readonly type: 'WrongStatus'; readonly id: ItemId; readonly expected: Item['statusTemp'] }
   | { readonly type: 'AlreadyDiscarded'; readonly id: ItemId }
-  | { readonly type: 'InvalidReorderIndex'; readonly section: Section; readonly index: number }
+  | { readonly type: 'InvalidReorderIndex'; readonly section: Status; readonly index: number }
   | { readonly type: 'TagAlreadyExists'; readonly name: TagName }
   | { readonly type: 'TagNotFound'; readonly name: TagName }
   | { readonly type: 'TagAlreadyOnItem'; readonly id: ItemId; readonly name: TagName }
@@ -164,7 +164,7 @@ function applyAdd(
     id,
     headline,
     createdAt: now,
-    status: 'active',
+    statusTemp: 'active',
     description: null,
     tags: [],
   };
@@ -219,7 +219,7 @@ function applySetDescription(
     case 'wip': {
       // Active: moves between New/WIP automatically when the section changes.
       const updated: ActiveItem = { ...located.item, description };
-      const targetSection: Section = description === null ? 'new' : 'wip';
+      const targetSection: Status = description === null ? 'new' : 'wip';
       if (targetSection === located.section) {
         return located.section === 'new'
           ? ok({ ...board, new: replaceAt(board.new, located.index, updated) })
@@ -244,7 +244,7 @@ function applyComplete(board: Board, id: ItemId, now: IsoTimestamp): Result<Boar
     id: located.item.id,
     headline: located.item.headline,
     createdAt: located.item.createdAt,
-    status: 'complete',
+    statusTemp: 'complete',
     description: located.item.description,
     completedAt: now,
     tags: located.item.tags,
@@ -262,7 +262,7 @@ function applyUncomplete(board: Board, id: ItemId): Result<Board, DomainError> {
     id: located.item.id,
     headline: located.item.headline,
     createdAt: located.item.createdAt,
-    status: 'active',
+    statusTemp: 'active',
     description: located.item.description,
     tags: located.item.tags,
   };
@@ -279,7 +279,7 @@ function applyDiscard(board: Board, id: ItemId, now: IsoTimestamp): Result<Board
     id: located.item.id,
     headline: located.item.headline,
     createdAt: located.item.createdAt,
-    status: 'discarded',
+    statusTemp: 'discarded',
     description: located.item.description,
     discardedAt: now,
     tags: located.item.tags,
@@ -297,7 +297,7 @@ function applyRestore(board: Board, id: ItemId): Result<Board, DomainError> {
     id: located.item.id,
     headline: located.item.headline,
     createdAt: located.item.createdAt,
-    status: 'active',
+    statusTemp: 'active',
     description: located.item.description,
     tags: located.item.tags,
   };
@@ -323,7 +323,7 @@ function reorderList<T>(list: readonly T[], fromIndex: number, toIndex: number):
 
 function applyReorder(
   board: Board,
-  section: Section,
+  section: Status,
   fromIndex: number,
   toIndex: number,
 ): Result<Board, DomainError> {

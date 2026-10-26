@@ -12,7 +12,7 @@ function item(headline: string): ActiveItem {
     id: generateItemId(),
     headline: unwrap(makeHeadline(headline)),
     createdAt: unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z')),
-    status: 'active',
+    statusTemp: 'active',
     description: null,
     tags: [],
   };

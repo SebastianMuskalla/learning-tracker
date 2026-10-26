@@ -1,4 +1,4 @@
-// See doc/requirement-2-search.md section 3.7.
+// See "Search shortcut" and "Browser shortcut from the search bar" in openspec/specs/search/spec.md.
 
 export type SearchShortcutResult = 'focus' | 'browser' | 'none';
 

@@ -3,8 +3,15 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parse } from '../../src/format/parse';
+import { serialize } from '../../src/format/serialize';
 
 const fixturesDir = fileURLToPath(new URL('./fixtures/', import.meta.url));
+
+// Parts of a small hand-written file. `HEADER` ends with the line `## New` (line 5).
+const HEADER = '<!-- version:5 -->\n\n# Learning\n\n## New';
+const ID = '01M3VXEYY3V9M2BMAMMK12GMBS';
+const META = `<!-- id:${ID} created:2026-10-01T14:21:29Z -->`;
+const REST = '## Complete\n\n## Discarded\n';
 
 function fixture(name: string): string {
   return readFileSync(`${fixturesDir}${name}`, 'utf-8');
@@ -182,9 +189,103 @@ describe('parse — fences', () => {
     expect(result.value.wip[0]?.description).toContain('## Notes');
   });
 
+  it('saves a long hand-written fence around text without backticks as a fence of 3 backticks', () => {
+    const text = [
+      HEADER,
+      '',
+      '## WIP',
+      '',
+      '### Docker',
+      META,
+      '``````markdown',
+      'Notes',
+      '``````',
+      '',
+      REST,
+    ].join('\n');
+    const result = parse(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(serialize(result.value)).toContain(`${META}\n\`\`\`markdown\nNotes\n\`\`\`\n`);
+  });
+
+  it('closes a fence of 3 backticks at an inner fence of 3 backticks, and reports the line after it', () => {
+    const text = [
+      HEADER,
+      '',
+      '## WIP',
+      '',
+      '### Docker',
+      META,
+      '```markdown',
+      'Example:',
+      '```ts',
+      'code',
+      '```',
+      'more text',
+      '```',
+      '',
+      REST,
+    ].join('\n');
+    expect(parse(text)).toMatchObject({
+      ok: false,
+      error: { line: 16, reason: 'Expected section heading "## Complete", found "more text"' },
+    });
+  });
+
   it('rejects a closing fence with trailing spaces', () => {
     const result = parse(fixture('bad-closing-fence.md').replace('````\n', '``` \n'));
     expect(result).toMatchObject({ ok: false, error: { line: 13 } });
+  });
+
+  it('accepts blank lines at the edges of a description, and the next save removes them', () => {
+    const text = [
+      HEADER,
+      '',
+      '## WIP',
+      '',
+      '### Docker',
+      META,
+      '```markdown',
+      '',
+      '  ',
+      'Notes',
+      '',
+      '```',
+      '',
+      REST,
+    ].join('\n');
+    const result = parse(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.wip[0]?.description).toBe('Notes');
+    expect(serialize(result.value)).toContain(`${META}\n\`\`\`markdown\nNotes\n\`\`\`\n`);
+  });
+});
+
+describe('parse — accepted and rejected variants', () => {
+  it('rejects an item id with a lower-case letter', () => {
+    const meta = META.replace(ID, ID.toLowerCase());
+    const result = parse([HEADER, '', '### Docker', meta, '', '## WIP', '', REST].join('\n'));
+    expect(result).toMatchObject({ ok: false, error: { line: 8 } });
+    if (result.ok) return;
+    expect(result.error.reason).toContain('upper-case ULID');
+  });
+
+  it('rejects a headline that contains a comment', () => {
+    const result = parse([HEADER, '', '### Docker <!-- note -->', META, '', '## WIP', '', REST].join('\n'));
+    expect(result).toMatchObject({
+      ok: false,
+      error: { line: 7, reason: 'Invalid headline: the headline contains "<!--"' },
+    });
+  });
+
+  it('accepts spaces around a headline, and the next save removes them', () => {
+    const result = parse([HEADER, '', '###  Docker  ', META, '', '## WIP', '', REST].join('\n'));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.new[0]?.headline).toBe('Docker');
+    expect(serialize(result.value)).toContain(`### Docker\n${META}\n`);
   });
 });
 
@@ -196,5 +297,13 @@ describe('parse — error messages (E8)', () => {
     if (result.ok) return;
     expect(result.error.reason).toContain('"2026-13-45T00:00:00Z" is not a valid timestamp');
     expect(result.error.reason).not.toContain('{');
+  });
+
+  it('rejects a date that does not exist', () => {
+    const meta = META.replace('2026-10-01T14:21:29Z', '2026-02-30T00:00:00Z');
+    const result = parse([HEADER, '', '### Docker', meta, '', '## WIP', '', REST].join('\n'));
+    expect(result).toMatchObject({ ok: false, error: { line: 8 } });
+    if (result.ok) return;
+    expect(result.error.reason).toContain('"2026-02-30T00:00:00Z" is not a valid timestamp');
   });
 });

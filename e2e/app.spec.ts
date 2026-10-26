@@ -24,7 +24,7 @@ function headlinesOnGithub(github: FakeGithub): string[] {
 }
 
 async function waitUntilSaved(page: Page): Promise<void> {
-  await expect(page.locator('.overlay .label')).toHaveText('Saved');
+  await expect(page.locator('.sync-status-box .label')).toHaveText('Saved');
 }
 
 test('first setup, create the file, add an item', async ({ page }) => {
@@ -40,8 +40,8 @@ test('first setup, create the file, add an item', async ({ page }) => {
   await page.getByRole('button', { name: 'Create it' }).click();
   await waitUntilSaved(page);
 
-  await page.getByLabel('Add topic').fill('Rust ownership');
-  await page.getByLabel('Add topic').press('Enter');
+  await page.getByLabel('Add item').fill('Rust ownership');
+  await page.getByLabel('Add item').press('Enter');
   await expect(page.getByText('Rust ownership')).toBeVisible();
   await waitUntilSaved(page);
 
@@ -50,19 +50,19 @@ test('first setup, create the file, add an item', async ({ page }) => {
 });
 
 test('edit a description with a code block; the code is highlighted', async ({ page }) => {
-  const github = new FakeGithub(serialize(boardWith('Topic')));
+  const github = new FakeGithub(serialize(boardWith('Item')));
   await github.install(page);
   await configure(page);
   await page.goto('./');
 
-  await page.getByText('Topic', { exact: true }).click();
+  await page.getByText('Item', { exact: true }).click();
   const textarea = page.getByPlaceholder('Notes, links, code — Markdown supported.');
   await textarea.fill('Example:\n\n```ts\nconst x = 1;\n```');
   await page.getByRole('button', { name: 'Send' }).click();
   await waitUntilSaved(page);
 
   // highlight.js is loaded lazily, as its own chunk; the CSP must allow it.
-  await expect(page.locator('.drawer .preview .hljs-keyword').first()).toHaveText('const');
+  await expect(page.locator('.detail-view .preview .hljs-keyword').first()).toHaveText('const');
   expect(github.text).toContain('```ts\nconst x = 1;\n```');
 });
 
@@ -76,8 +76,8 @@ test('a change on GitHub and a local change are merged after a 409', async ({ pa
   // Someone else adds an item on GitHub. The app still has the old sha.
   github.setRemote(serialize(boardWith('Theirs', 'First')));
 
-  await page.getByLabel('Add topic').fill('Mine');
-  await page.getByLabel('Add topic').press('Enter');
+  await page.getByLabel('Add item').fill('Mine');
+  await page.getByLabel('Add item').press('Enter');
   await waitUntilSaved(page);
 
   expect([...headlinesOnGithub(github)].sort()).toEqual(['First', 'Mine', 'Theirs']);
@@ -104,7 +104,7 @@ test('the same item changed on both sides shows the conflict dialog', async ({ p
   );
 
   await page.getByText('Shared').click();
-  const headline = page.locator('.drawer input.headline');
+  const headline = page.locator('.detail-view input.headline');
   await headline.fill('Mine');
   await headline.press('Enter');
 
@@ -137,7 +137,7 @@ test('the Uncategorized chip filters untagged items and disappears after tagging
   await expect(page.locator('.columns').getByText('Tagged')).toBeHidden();
 
   await page.locator('.columns').getByText('Plain').click();
-  await page.locator('.drawer').getByRole('button', { name: 'vue' }).click();
+  await page.locator('.detail-view').getByRole('button', { name: 'vue' }).click();
   await waitUntilSaved(page);
 
   await expect(filterBar.getByRole('button', { name: 'Uncategorized' })).toBeHidden();
@@ -166,7 +166,7 @@ test('a keyword link shows a tooltip and opens the target', async ({ page }) => 
   await page.goto('./');
 
   await page.locator('.columns').getByText('Source').click();
-  const link = page.locator('.drawer .keyword-link');
+  const link = page.locator('.detail-view .keyword-link');
   await expect(link).toHaveText('OWASP');
 
   await link.hover();
@@ -175,7 +175,7 @@ test('a keyword link shows a tooltip and opens the target', async ({ page }) => 
   await expect(tooltip).toContainText('A list of the top web risks.');
 
   await link.click();
-  await expect(page.locator('.drawer input.headline')).toHaveValue(
+  await expect(page.locator('.detail-view input.headline')).toHaveValue(
     'OWASP (Open Worldwide Application Security Project)',
   );
   await expect(tooltip).toBeHidden();
@@ -202,7 +202,7 @@ test('a version-1 file is upgraded and keeps its items', async ({ page }) => {
     '',
     '## New',
     '',
-    '### Old topic',
+    '### Old item',
     '<!-- id:01M2KCX2QA8VMTXY950V44DB2J created:2026-09-15 -->',
     '',
     '## WIP',
@@ -217,12 +217,12 @@ test('a version-1 file is upgraded and keeps its items', async ({ page }) => {
   await configure(page);
   await page.goto('./');
 
-  await expect(page.getByText('Old topic')).toBeVisible();
+  await expect(page.getByText('Old item')).toBeVisible();
   await waitUntilSaved(page);
 
   expect(github.putMessages).toEqual([
     'Upgrade learning.md from format v1 to v5\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence\nv3 → v4: move tags to a list, use full timestamps and lower-case colors, remove empty descriptions, fix New/WIP placement\nv4 → v5: remove the tag "Uncategorized", which is now a reserved name',
   ]);
   expect(github.text?.startsWith('<!-- version:5 -->\n\n# Learning\n\n')).toBe(true);
-  expect(headlinesOnGithub(github)).toEqual(['Old topic']);
+  expect(headlinesOnGithub(github)).toEqual(['Old item']);
 });

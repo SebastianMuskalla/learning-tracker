@@ -3,9 +3,11 @@ import { ref, watch } from 'vue';
 import BoardView from './components/BoardView.vue';
 import SetupView from './components/SetupView.vue';
 import { useSyncLifecycle } from './composables/useSyncLifecycle';
+import { useBoardStore } from './store/board';
 import { useSettingsStore } from './store/settings';
 
 const settings = useSettingsStore();
+const boardStore = useBoardStore();
 useSyncLifecycle();
 const showSetup = ref(!settings.isReady);
 const setupReason = ref<string | null>(null);
@@ -23,6 +25,9 @@ function openSettings(reason?: string): void {
 }
 
 function onSetupDone(): void {
+  // A token rejection while the setup screen was open sets this flag, but only the board watches
+  // it. Clear it, so that the next rejection on the board opens the setup screen again.
+  boardStore.unauthorized = false;
   setupReason.value = null;
   showSetup.value = false;
 }

@@ -9,9 +9,9 @@ import type { ActiveItem } from '../../src/domain/types';
 
 const item: ActiveItem = {
   id: generateItemId(),
-  headline: unwrap(makeHeadline('Topic')),
+  headline: unwrap(makeHeadline('Item')),
   createdAt: unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z')),
-  status: 'active',
+  statusTemp: 'active',
   description: null,
   tags: [],
 };
@@ -48,6 +48,35 @@ describe('ItemCard keyboard access (O1)', () => {
     await wrapper.vm.$nextTick();
 
     expect(document.activeElement).toBe(wrapper.get('input.headline-input').element);
+    wrapper.unmount();
+  });
+});
+
+describe('ItemCard rename', () => {
+  it.each(['enter', 'esc'])('saves the new headline on %s, once', async (key) => {
+    const wrapper = mountCard();
+    await wrapper.get('.headline').trigger('dblclick');
+    const input = wrapper.get('input.headline-input');
+    await input.setValue('Renamed');
+
+    await input.trigger(`keyup.${key}`);
+    // The browser can fire `blur` while it removes the field.
+    await input.trigger('blur');
+
+    expect(wrapper.emitted('editHeadline')).toEqual([['Renamed']]);
+    expect(wrapper.find('input.headline-input').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('saves the new headline when the field loses the focus', async () => {
+    const wrapper = mountCard();
+    await wrapper.get('.headline').trigger('dblclick');
+    const input = wrapper.get('input.headline-input');
+    await input.setValue('Renamed');
+
+    await input.trigger('blur');
+
+    expect(wrapper.emitted('editHeadline')).toEqual([['Renamed']]);
     wrapper.unmount();
   });
 });

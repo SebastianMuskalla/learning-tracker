@@ -1,5 +1,5 @@
 import { err, ok, type Result } from './result';
-import { allItems, sectionOf, type Board, type Item, type Tag, type TagName } from './types';
+import { allItems, statusOf, type Board, type Item, type Tag, type TagName } from './types';
 
 export type BoardValidationError =
   | { readonly type: 'DuplicateId'; readonly id: string }
@@ -75,7 +75,7 @@ export function validateBoard(board: Board): Result<Board, BoardValidationError>
   }
 
   for (const item of allItems(board)) {
-    const expected = sectionOf(item);
+    const expected = statusOf(item);
     const actual = whichSectionArray(board, item.id);
     if (actual !== expected) {
       return err({ type: 'MisplacedItem', id: item.id, expectedSection: expected });
@@ -93,7 +93,7 @@ function whichSectionArray(board: Board, id: string): 'new' | 'wip' | 'complete'
   return undefined;
 }
 
-export { sectionOf };
+export { statusOf };
 
 export function boardsEqual(a: Board, b: Board): boolean {
   return (
@@ -122,7 +122,7 @@ function itemListsEqual(a: readonly Item[], b: readonly Item[]): boolean {
 
 /** Exported for the merge algorithm, which also needs to compare two items for equality. */
 export function itemsEqual(a: Item, b: Item | undefined): boolean {
-  if (b?.status !== a.status) return false;
+  if (b?.statusTemp !== a.statusTemp) return false;
   if (
     a.id !== b.id ||
     a.headline !== b.headline ||
@@ -132,7 +132,7 @@ export function itemsEqual(a: Item, b: Item | undefined): boolean {
     return false;
   }
   if (!tagArraysEqual(a.tags, b.tags)) return false;
-  if (a.status === 'complete' && b.status === 'complete') return a.completedAt === b.completedAt;
-  if (a.status === 'discarded' && b.status === 'discarded') return a.discardedAt === b.discardedAt;
+  if (a.statusTemp === 'complete' && b.statusTemp === 'complete') return a.completedAt === b.completedAt;
+  if (a.statusTemp === 'discarded' && b.statusTemp === 'discarded') return a.discardedAt === b.discardedAt;
   return true;
 }

@@ -3,16 +3,16 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
 import {
   allItems,
-  sectionOf,
+  statusOf,
   type Item,
   type ItemId,
-  type Section,
+  type Status,
   type Tag,
   type TagName,
 } from '../domain/types';
 import { formatTimestamp } from '../format/displayTimestamp';
-import { buildKeywordIndex, keywordStatuses, linkKeywordsFor } from '../links/index';
-import { closestKeywordLink, linkKeywords } from '../links/linkDom';
+import { buildKeywordIndex, keywordInfos, linkKeywordsFor } from '../keywords/index';
+import { closestKeywordLink, linkKeywords } from '../keywords/linkDom';
 import { highlightCodeBlocks, renderMarkdown } from '../markdown/render';
 import { markHits } from '../search/markDom';
 import { useBoardStore } from '../store/board';
@@ -39,14 +39,14 @@ const emit = defineEmits<{
   openItem: [id: ItemId];
 }>();
 
-const SECTION_LABEL: Record<Section, string> = {
+const STATUS_LABEL: Record<Status, string> = {
   new: 'New',
   wip: 'WIP',
   complete: 'Complete',
   discarded: 'Discarded',
 };
 
-const statusLabel = computed(() => SECTION_LABEL[sectionOf(item)]);
+const statusLabel = computed(() => STATUS_LABEL[statusOf(item)]);
 const searchStore = useSearchStore();
 const boardStore = useBoardStore();
 
@@ -60,8 +60,8 @@ const descriptionChangedElsewhere = ref(false);
 const livePreviewEl = ref<HTMLElement | null>(null);
 const staticPreviewEl = ref<HTMLElement | null>(null);
 const showDeleteConfirm = ref(false);
-const descriptionEditing = ref(item.status !== 'complete');
-/** True once the drawer is being removed. Its drafts are saved then, and never again. */
+const descriptionEditing = ref(item.statusTemp !== 'complete');
+/** True once the detail view is being removed. Its drafts are saved then, and never again. */
 let unmounting = false;
 
 /** The value a draft would be stored as. Used to compare a draft with the stored value. */
@@ -82,15 +82,15 @@ const descriptionDirty = computed(
 
 // Tell the store about drafts that are not saved yet, so that closing the tab asks first.
 watch(headlineDirty, (dirty) => {
-  boardStore.setDraftDirty('drawer-headline', dirty);
+  boardStore.setDraftDirty('detail-view-headline', dirty);
 });
 watch(descriptionDirty, (dirty) => {
-  boardStore.setDraftDirty('drawer-description', dirty);
+  boardStore.setDraftDirty('detail-view-description', dirty);
 });
 
 const renderedHtml = computed(() => renderMarkdown(descriptionDraft.value));
 
-// Keyword links (see README.md, "Keyword links"). The targets come from the stored board; the
+// Keyword links (see openspec/specs/keywords/spec.md). The targets come from the stored board; the
 // "Linked as:" row uses the headline draft, so it changes while you type.
 const keywordIndex = computed(() => buildKeywordIndex(boardStore.board));
 const linkTargets = computed(() => linkKeywordsFor(keywordIndex.value, item.id));
@@ -100,7 +100,7 @@ const linkSignature = computed(() =>
     .map((k) => `${k.targetId}\u0000${k.keyword.text}\u0000${k.targetHeadline}`)
     .join('\u0001'),
 );
-const ownKeywords = computed(() => keywordStatuses(keywordIndex.value, headlineDraft.value, item.id));
+const ownKeywords = computed(() => keywordInfos(keywordIndex.value, headlineDraft.value, item.id));
 
 function quoteList(headlines: readonly string[]): string {
   return headlines.map((headline) => `"${headline}"`).join(', ');
@@ -128,7 +128,7 @@ function scrollFirstMarkIntoView(): void {
 }
 
 // Marks are refreshed whenever the rendered content, the edit/preview toggle, or the search term
-// changes. Scrolling the first hit into view, though, only happens when the drawer opens (on the
+// changes. Scrolling the first hit into view, though, only happens when the detail view opens (on the
 // first, immediate run, `oldTerm`/`oldId` are `undefined`) or the search term itself changes — not
 // on every content edit, which would otherwise yank the scroll position around while typing.
 watch(
@@ -155,7 +155,7 @@ watch(
       headlineChangedElsewhere.value = false;
       descriptionChangedElsewhere.value = false;
       showDeleteConfirm.value = false;
-      descriptionEditing.value = item.status !== 'complete';
+      descriptionEditing.value = item.statusTemp !== 'complete';
       return;
     }
 
@@ -194,15 +194,15 @@ function saveDrafts(): void {
   saveDraftsFor(item.id, item.headline, item.description ?? '');
 }
 
-// Every way of closing the drawer (Escape, the X button, selecting nothing, deleting) unmounts it,
+// Every way of closing the detail view (Escape, the X button, selecting nothing, deleting) unmounts it,
 // so this is the one place that saves the drafts on close.
 onBeforeUnmount(() => {
   hideTooltip();
   saveDrafts();
   // A `blur` that the browser fires while the elements are removed must not save a second time.
   unmounting = true;
-  boardStore.setDraftDirty('drawer-headline', false);
-  boardStore.setDraftDirty('drawer-description', false);
+  boardStore.setDraftDirty('detail-view-headline', false);
+  boardStore.setDraftDirty('detail-view-description', false);
 });
 
 function saveHeadline(): void {
@@ -219,7 +219,7 @@ function saveHeadline(): void {
 
 function saveDescription(): void {
   if (unmounting) return;
-  if (item.status === 'complete' && descriptionDraft.value.trim() === '') {
+  if (item.statusTemp === 'complete' && descriptionDraft.value.trim() === '') {
     descError.value = 'A completed item must keep a description.';
     return;
   }
@@ -256,7 +256,7 @@ function discardInstead(): void {
 
 function confirmDelete(): void {
   showDeleteConfirm.value = false;
-  // The item goes away, so its drafts must not be saved when the drawer unmounts.
+  // The item goes away, so its drafts must not be saved when the detail view unmounts.
   headlineDraft.value = item.headline;
   descriptionDraft.value = item.description ?? '';
   emit('delete', item.id);
@@ -330,7 +330,7 @@ function onStaticPreviewClick(event: MouseEvent): void {
   descriptionEditing.value = true;
 }
 
-/** The app has no URL per topic, so a middle click does the same as a normal click. */
+/** The app has no URL per item, so a middle click does the same as a normal click. */
 function onPreviewAuxClick(event: MouseEvent): void {
   if (event.button === 1) openKeywordTarget(event);
 }
@@ -344,15 +344,16 @@ function onKeydown(event: KeyboardEvent): void {
     close();
   } else if ((event.ctrlKey || event.metaKey) && event.key === 's') {
     event.preventDefault();
+    saveHeadline();
     saveDescription();
   }
 }
 </script>
 
 <template>
-  <aside class="drawer" @keydown="onKeydown" @scroll.capture="hideTooltip">
-    <div class="drawer-header">
-      <span class="status-badge" :class="sectionOf(item)">{{ statusLabel }}</span>
+  <aside class="detail-view" @keydown="onKeydown" @scroll.capture="hideTooltip">
+    <div class="detail-view-header">
+      <span class="status-badge" :class="statusOf(item)">{{ statusLabel }}</span>
       <input v-model="headlineDraft" class="headline" @blur="saveHeadline" @keyup.enter="saveHeadline" />
       <button class="close" title="Close (Esc)" aria-label="Close" @click="close">
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -363,23 +364,23 @@ function onKeydown(event: KeyboardEvent): void {
       <template v-if="ownKeywords.length > 0">
         <span class="keywords-label">Linked as:</span>
         <span
-          v-for="status in ownKeywords"
-          :key="status.keyword.key"
+          v-for="info in ownKeywords"
+          :key="info.keyword.key"
           class="keyword-chip"
-          :class="{ collision: status.alsoUsedBy.length > 0 }"
+          :class="{ collision: info.alsoUsedBy.length > 0 }"
         >
           <i
-            v-if="status.alsoUsedBy.length > 0"
+            v-if="info.alsoUsedBy.length > 0"
             class="fa-solid fa-triangle-exclamation"
             aria-hidden="true"
           ></i>
-          {{ status.keyword.text }}
-          <span v-if="status.alsoUsedBy.length > 0" class="collision-note">
-            Also used by {{ quoteList(status.alsoUsedBy) }} — not linked.
+          {{ info.keyword.text }}
+          <span v-if="info.alsoUsedBy.length > 0" class="collision-note">
+            Also used by {{ quoteList(info.alsoUsedBy) }} — not linked.
           </span>
         </span>
-        <span v-if="item.status !== 'complete'" class="keywords-note">
-          Other topics link here only when this topic is complete.
+        <span v-if="item.statusTemp !== 'complete'" class="keywords-note">
+          Other items link here only when this item is complete.
         </span>
       </template>
       <span v-else class="keywords-note">
@@ -395,11 +396,11 @@ function onKeydown(event: KeyboardEvent): void {
     <dl class="dates">
       <dt>Created</dt>
       <dd>{{ formatTimestamp(item.createdAt) }}</dd>
-      <template v-if="item.status === 'complete'">
+      <template v-if="item.statusTemp === 'complete'">
         <dt>Completed</dt>
         <dd>{{ formatTimestamp(item.completedAt) }}</dd>
       </template>
-      <template v-if="item.status === 'discarded'">
+      <template v-if="item.statusTemp === 'discarded'">
         <dt>Discarded</dt>
         <dd>{{ formatTimestamp(item.discardedAt) }}</dd>
       </template>
@@ -414,6 +415,7 @@ function onKeydown(event: KeyboardEvent): void {
           :color="tag.color"
           :mode="item.tags.includes(tag.name) ? 'normal' : 'muted'"
           interactive
+          :pressed="item.tags.includes(tag.name)"
           @click="emit('toggleTag', item.id, tag.name)"
         />
       </template>
@@ -476,19 +478,19 @@ function onKeydown(event: KeyboardEvent): void {
     <h3>Actions</h3>
     <div class="actions">
       <button
-        v-if="item.status === 'active'"
+        v-if="item.statusTemp === 'active'"
         :disabled="item.description === null"
         @click="emit('complete', item.id)"
       >
         <i class="fa-solid fa-check" aria-hidden="true"></i> Complete
       </button>
-      <button v-if="item.status === 'complete'" @click="emit('uncomplete', item.id)">
+      <button v-if="item.statusTemp === 'complete'" @click="emit('uncomplete', item.id)">
         <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reopen
       </button>
-      <button v-if="item.status === 'discarded'" @click="emit('restore', item.id)">
+      <button v-if="item.statusTemp === 'discarded'" @click="emit('restore', item.id)">
         <i class="fa-solid fa-trash-arrow-up" aria-hidden="true"></i> Restore
       </button>
-      <button v-if="item.status !== 'discarded'" class="danger" @click="emit('discard', item.id)">
+      <button v-if="item.statusTemp !== 'discarded'" class="danger" @click="emit('discard', item.id)">
         <i class="fa-solid fa-ban" aria-hidden="true"></i> Discard
       </button>
       <button class="danger" @click="showDeleteConfirm = true">
@@ -503,7 +505,7 @@ function onKeydown(event: KeyboardEvent): void {
         <button class="ghost" autofocus @click="showDeleteConfirm = false">
           <i class="fa-solid fa-xmark" aria-hidden="true"></i> Cancel
         </button>
-        <button v-if="item.status !== 'discarded'" class="ghost" @click="discardInstead">
+        <button v-if="item.statusTemp !== 'discarded'" class="ghost" @click="discardInstead">
           <i class="fa-solid fa-ban" aria-hidden="true"></i> Discard instead
         </button>
         <button class="danger" @click="confirmDelete">
@@ -517,12 +519,12 @@ function onKeydown(event: KeyboardEvent): void {
 </template>
 
 <style scoped>
-.drawer {
+.detail-view {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
-  width: var(--drawer-width);
+  width: var(--detail-view-width);
   background: var(--surface);
   border-left: 1px solid var(--border);
   padding: 1rem 1.2rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
@@ -531,7 +533,7 @@ function onKeydown(event: KeyboardEvent): void {
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
 }
 
-.drawer-header {
+.detail-view-header {
   display: flex;
   gap: 0.5rem;
   align-items: center;
@@ -644,9 +646,9 @@ h3 {
   font-size: 0.9rem;
 }
 
-/* Row vs. column depends on the drawer's own width, not the viewport: the drawer can be narrow
- * even on a wide screen, and vice versa. */
-.drawer {
+/* Row vs. column depends on the detail view's own width, not the viewport: the detail view can be
+ * narrow even on a wide screen, and vice versa. */
+.detail-view {
   container-type: inline-size;
 }
 

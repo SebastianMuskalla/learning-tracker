@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
-/** `system` follows the device setting (light if the device states no preference). */
-export type ThemeMode = 'system' | 'light' | 'dark';
+/** `device` follows the device setting (light if the device states no preference). */
+export type ThemeMode = 'device' | 'light' | 'dark';
 
-export const THEME_MODES: readonly ThemeMode[] = ['system', 'light', 'dark'];
+export const THEME_MODES: readonly ThemeMode[] = ['device', 'light', 'dark'];
 
 const STORAGE_KEY = 'learning-tracker:theme';
 
@@ -15,9 +15,10 @@ function isThemeMode(value: unknown): value is ThemeMode {
 function loadPersisted(): ThemeMode {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return isThemeMode(raw) ? raw : 'system';
+    // An unknown value, also the old name `system` of the mode `device`, means `device`.
+    return isThemeMode(raw) ? raw : 'device';
   } catch {
-    return 'system';
+    return 'device';
   }
 }
 
@@ -35,7 +36,7 @@ function persist(mode: ThemeMode): void {
  */
 function apply(mode: ThemeMode): void {
   const root = document.documentElement;
-  if (mode === 'system') {
+  if (mode === 'device') {
     delete root.dataset['theme'];
   } else {
     root.dataset['theme'] = mode;

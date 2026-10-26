@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
 import { allItems, findItemById } from '../domain/types';
 import { githubFileUrl } from '../github/urls';
-import type { Board, ItemId, Section, TagName } from '../domain/types';
+import type { Board, ItemId, Status, TagName } from '../domain/types';
 import { itemMatches } from '../search/match';
 import { searchShortcutAction } from '../search/shortcut';
 import { useBoardStore } from '../store/board';
@@ -11,14 +11,14 @@ import { useSearchStore } from '../store/search';
 import { useSettingsStore } from '../store/settings';
 import { useTagFilterStore } from '../store/tagFilter';
 import { isUncategorized, passesTagFilter } from '../tags/filter';
-import ConflictBanner from './ConflictBanner.vue';
-import ItemDetailDrawer from './ItemDetailDrawer.vue';
+import ConflictDialog from './ConflictDialog.vue';
+import HeaderBar from './HeaderBar.vue';
+import ItemDetailView from './ItemDetailView.vue';
 import ParseErrorBanner from './ParseErrorBanner.vue';
 import SearchBar from './SearchBar.vue';
 import SectionColumn from './SectionColumn.vue';
-import SyncStatusOverlay from './SyncStatusOverlay.vue';
+import SyncStatusBox from './SyncStatusBox.vue';
 import TagFilterBar from './TagFilterBar.vue';
-import TopBar from './TopBar.vue';
 
 const emit = defineEmits<{ openSettings: [reason?: string] }>();
 
@@ -27,7 +27,7 @@ const boardStore = useBoardStore();
 const searchStore = useSearchStore();
 const tagFilterStore = useTagFilterStore();
 
-const topBar = ref<{ focusAddInput: () => void } | null>(null);
+const headerBar = ref<{ focusAddInput: () => void } | null>(null);
 const searchBar = ref<{ focus: () => void; hasFocus: () => boolean } | null>(null);
 const selectedId = ref<ItemId | null>(null);
 const selectedItem = computed(() =>
@@ -139,7 +139,7 @@ function onGlobalKeydown(event: KeyboardEvent): void {
   const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
   if (event.key === 'n' && !isTyping) {
     event.preventDefault();
-    topBar.value?.focusAddInput();
+    headerBar.value?.focusAddInput();
   } else if (event.key === 'Escape') {
     selectedId.value = null;
   }
@@ -151,7 +151,7 @@ function onAdd(headline: string): void {
   boardStore.applyAndSync({ type: 'add', headline: result.value });
 }
 
-function onReorder(section: Section, fromIndex: number, toIndex: number): void {
+function onReorder(section: Status, fromIndex: number, toIndex: number): void {
   boardStore.applyAndSync({ type: 'reorder', section, fromIndex, toIndex });
 }
 
@@ -205,7 +205,12 @@ function onToggleTag(id: ItemId, tag: TagName): void {
 
 <template>
   <div class="board" :class="{ shifted: selectedItem }">
-    <TopBar ref="topBar" @add="onAdd" @open-settings="emit('openSettings')" />
+    <HeaderBar
+      ref="headerBar"
+      :add-disabled="boardStore.fileNotFound"
+      @add="onAdd"
+      @open-settings="emit('openSettings')"
+    />
 
     <ParseErrorBanner
       v-if="boardStore.parseError"
@@ -280,7 +285,7 @@ function onToggleTag(id: ItemId, tag: TagName): void {
       />
     </main>
 
-    <ItemDetailDrawer
+    <ItemDetailView
       v-if="selectedItem"
       :item="selectedItem"
       :tags="boardStore.board.tags"
@@ -296,10 +301,11 @@ function onToggleTag(id: ItemId, tag: TagName): void {
       @open-item="onSelect"
     />
 
-    <ConflictBanner
+    <ConflictDialog
       v-if="boardStore.conflict"
       :local="boardStore.conflict.local"
       :remote="boardStore.conflict.remote"
+      :conflicts="boardStore.conflict.conflicts"
       @keep-mine="boardStore.resolveConflict('keepMine')"
       @keep-theirs="boardStore.resolveConflict('keepTheirs')"
     />
@@ -312,7 +318,7 @@ function onToggleTag(id: ItemId, tag: TagName): void {
         :total-count="totalCount"
       />
 
-      <SyncStatusOverlay
+      <SyncStatusBox
         :sync-status="boardStore.syncStatus"
         :error-message="boardStore.errorMessage"
         :notice="boardStore.notice"
@@ -331,7 +337,7 @@ function onToggleTag(id: ItemId, tag: TagName): void {
 
 @media (min-width: 1300px) {
   .board.shifted {
-    margin-right: var(--drawer-width);
+    margin-right: var(--detail-view-width);
   }
 }
 

@@ -36,7 +36,7 @@ describe('serialize', () => {
       id: generateItemId(),
       headline: unwrap(makeHeadline('Kubernetes operators')),
       createdAt: unwrap(makeIsoTimestamp('2026-09-15T14:32:07Z')),
-      status: 'active',
+      statusTemp: 'active',
       description: null,
       tags: [],
     };
@@ -53,7 +53,7 @@ describe('serialize', () => {
       id: generateItemId(),
       headline: unwrap(makeHeadline('Tagged')),
       createdAt: unwrap(makeIsoTimestamp('2026-09-15T14:32:07Z')),
-      status: 'active',
+      statusTemp: 'active',
       description: unwrap(makeDescription('text')),
       tags: [vue],
     };
@@ -95,7 +95,7 @@ describe('serialize', () => {
       id: generateItemId(),
       headline: unwrap(makeHeadline('Tagged')),
       createdAt: unwrap(makeIsoTimestamp('2026-09-15T14:32:07Z')),
-      status: 'active',
+      statusTemp: 'active',
       description: null,
       tags: [vue, rust],
     };
@@ -103,7 +103,7 @@ describe('serialize', () => {
       id: generateItemId(),
       headline: unwrap(makeHeadline('Untagged')),
       createdAt: unwrap(makeIsoTimestamp('2026-09-15T14:32:07Z')),
-      status: 'active',
+      statusTemp: 'active',
       description: null,
       tags: [],
     };

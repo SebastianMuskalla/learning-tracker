@@ -5,11 +5,11 @@ import { renderMarkdown } from '../markdown/render';
 import { markHits } from '../search/markDom';
 import { normalize, splitIntoSegments } from '../search/match';
 import { useSearchStore } from '../store/search';
-import type { Item, Section, Tag } from '../domain/types';
+import type { Item, Status, Tag } from '../domain/types';
 
 const { item, section, tags } = defineProps<{
   readonly item: Item;
-  readonly section: Section;
+  readonly section: Status;
   /** The board's tag definitions, used only to look up each of this item's tag colors. */
   readonly tags: readonly Tag[];
 }>();
@@ -99,7 +99,10 @@ function onCardKeydown(event: KeyboardEvent): void {
   }
 }
 
+/** Enter, Esc, and leaving the field all save. The `blur` that the browser fires when the field is
+ *  removed after Enter or Esc finds `editing` false and does not save a second time. */
 function commitEdit(): void {
+  if (!editing.value) return;
   const result = makeHeadline(draft.value);
   if (!result.ok) {
     editError.value = 'Headline cannot be empty.';
@@ -109,10 +112,6 @@ function commitEdit(): void {
   if (result.value !== item.headline) {
     emit('editHeadline', result.value);
   }
-}
-
-function cancelEdit(): void {
-  editing.value = false;
 }
 </script>
 
@@ -135,7 +134,7 @@ function cancelEdit(): void {
         class="headline-input"
         @click.stop
         @keyup.enter="commitEdit"
-        @keyup.esc="cancelEdit"
+        @keyup.esc="commitEdit"
         @blur="commitEdit"
       />
       <span v-else class="headline" @dblclick="startEdit">

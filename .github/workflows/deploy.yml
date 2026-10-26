@@ -28,13 +28,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm format:check
+      - run: pnpm format:ci
 
-      - run: pnpm lint
+      - run: pnpm lint:ci
 
-      - run: pnpm typecheck
-
-      - run: pnpm test:coverage
+      - run: pnpm test
 
       # The browser tests expect the default base path (see playwright.config.ts), so this build
       # does not use VITE_BASE.
@@ -48,7 +46,7 @@ jobs:
       - run: pnpm build
         env:
           # Optional repo variable (Settings -> Secrets and variables -> Actions -> Variables).
-          # Only needed if the app repository isn't named "learning-tracker" — see README.md.
+          # Only needed if the app repository isn't named "learning-tracker" — see "About the base path" in README.md.
           VITE_BASE: ${{ vars.VITE_BASE }}
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
