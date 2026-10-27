@@ -99,10 +99,6 @@ function onUpdate(event: DraggableEvent<Item>): void {
   background: color-mix(in srgb, var(--new-tint) 14%, var(--surface-alt));
 }
 
-.column.wip {
-  background: color-mix(in srgb, var(--wip-tint) 16%, var(--surface-alt));
-}
-
 .column.complete {
   background: color-mix(in srgb, var(--complete-tint) 16%, var(--surface-alt));
 }

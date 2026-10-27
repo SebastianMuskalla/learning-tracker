@@ -20,7 +20,7 @@ function headlinesOnGithub(github: FakeGithub): string[] {
   if (github.text === null) return [];
   const parsed = parse(github.text);
   if (!parsed.ok) throw new Error(`learning.md does not parse: ${parsed.error.reason}`);
-  return [...parsed.value.new, ...parsed.value.wip].map((item) => item.headline);
+  return parsed.value.new.map((item) => item.headline);
 }
 
 async function waitUntilSaved(page: Page): Promise<void> {
@@ -190,7 +190,7 @@ test('an empty file is upgraded to the current format', async ({ page }) => {
   await waitUntilSaved(page);
 
   expect(github.putMessages).toHaveLength(1);
-  expect(github.putMessages[0]).toMatch(/^Upgrade learning\.md from format v0 to v5/);
+  expect(github.putMessages[0]).toMatch(/^Upgrade learning\.md from format v0 to v6/);
   expect(github.text).toBe(serialize(emptyBoard()));
 });
 
@@ -221,8 +221,8 @@ test('a version-1 file is upgraded and keeps its items', async ({ page }) => {
   await waitUntilSaved(page);
 
   expect(github.putMessages).toEqual([
-    'Upgrade learning.md from format v1 to v5\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence\nv3 → v4: move tags to a list, use full timestamps and lower-case colors, remove empty descriptions, fix New/WIP placement\nv4 → v5: remove the tag "Uncategorized", which is now a reserved name',
+    'Upgrade learning.md from format v1 to v6\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence\nv3 → v4: move tags to a list, use full timestamps and lower-case colors, remove empty descriptions, fix New/WIP placement\nv4 → v5: remove the tag "Uncategorized", which is now a reserved name\nv5 → v6: merge the WIP section into the New section',
   ]);
-  expect(github.text?.startsWith('<!-- version:5 -->\n\n# Learning\n\n')).toBe(true);
+  expect(github.text?.startsWith('<!-- version:6 -->\n\n# Learning\n\n')).toBe(true);
   expect(headlinesOnGithub(github)).toEqual(['Old item']);
 });

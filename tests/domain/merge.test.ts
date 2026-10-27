@@ -12,7 +12,7 @@ import {
 import { merge, mergeChoosing } from '../../src/domain/merge';
 import { unwrap } from '../../src/domain/result';
 import type {
-  ActiveItem,
+  NewItem,
   Board,
   CompleteItem,
   DiscardedItem,
@@ -42,24 +42,24 @@ function tag(name: string, color: string): Tag {
   return { name: tagName(name), color: hexColor(color) };
 }
 
-function newItem(text: string, overrides: Partial<ActiveItem> = {}): ActiveItem {
+function newItem(text: string, overrides: Partial<NewItem> = {}): NewItem {
   return {
     id: generateItemId(),
     headline: headline(text),
     createdAt: CREATED,
-    statusTemp: 'active',
+    status: 'new',
     description: null,
     tags: [],
     ...overrides,
   };
 }
 
-function wipItem(text: string, description: string, overrides: Partial<ActiveItem> = {}): ActiveItem {
+function describedItem(text: string, description: string, overrides: Partial<NewItem> = {}): NewItem {
   return {
     id: generateItemId(),
     headline: headline(text),
     createdAt: CREATED,
-    statusTemp: 'active',
+    status: 'new',
     description: unwrap(makeDescription(description)),
     tags: [],
     ...overrides,
@@ -75,7 +75,7 @@ function completeItem(
     id: generateItemId(),
     headline: headline(text),
     createdAt: CREATED,
-    statusTemp: 'complete',
+    status: 'complete',
     description: unwrap(makeDescription(description)),
     completedAt: COMPLETED,
     tags: [],
@@ -88,7 +88,7 @@ function discardedItem(text: string, overrides: Partial<DiscardedItem> = {}): Di
     id: generateItemId(),
     headline: headline(text),
     createdAt: CREATED,
-    statusTemp: 'discarded',
+    status: 'discarded',
     description: null,
     discardedAt: DISCARDED,
     tags: [],
@@ -96,32 +96,29 @@ function discardedItem(text: string, overrides: Partial<DiscardedItem> = {}): Di
   };
 }
 
-function boardWith(...items: readonly (ActiveItem | CompleteItem | DiscardedItem)[]): Board {
+function boardWith(...items: readonly (NewItem | CompleteItem | DiscardedItem)[]): Board {
   return boardWithTags([], ...items);
 }
 
 function boardWithTags(
   tags: readonly Tag[],
-  ...items: readonly (ActiveItem | CompleteItem | DiscardedItem)[]
+  ...items: readonly (NewItem | CompleteItem | DiscardedItem)[]
 ): Board {
   const board: {
     tags: Tag[];
-    new: ActiveItem[];
-    wip: ActiveItem[];
+    new: NewItem[];
     complete: CompleteItem[];
     discarded: DiscardedItem[];
   } = {
     tags: [...tags],
     new: [],
-    wip: [],
     complete: [],
     discarded: [],
   };
   for (const item of items) {
-    if (item.statusTemp === 'complete') board.complete.push(item);
-    else if (item.statusTemp === 'discarded') board.discarded.push(item);
-    else if (item.description === null) board.new.push(item);
-    else board.wip.push(item);
+    if (item.status === 'complete') board.complete.push(item);
+    else if (item.status === 'discarded') board.discarded.push(item);
+    else board.new.push(item);
   }
   return board;
 }
@@ -207,20 +204,20 @@ describe('merge', () => {
   });
 
   it('an item moved to a different section on only one side (e.g. completed locally) is kept there', () => {
-    const item = wipItem('In progress', 'some notes');
+    const item = describedItem('In progress', 'some notes');
     const base = boardWith(item);
     const completed: CompleteItem = {
       id: item.id,
       headline: item.headline,
       createdAt: item.createdAt,
-      statusTemp: 'complete',
+      status: 'complete',
       description: unwrap(makeDescription('some notes')),
       completedAt: COMPLETED,
       tags: item.tags,
     };
     const merged = ok(merge(base, boardWith(completed), base));
     expect(headlines(merged, 'complete')).toEqual(['In progress']);
-    expect(merged.wip).toHaveLength(0);
+    expect(merged.new).toHaveLength(0);
   });
 
   it('order follows remote, with local-only additions inserted at their local position', () => {
@@ -284,30 +281,30 @@ describe('merge', () => {
     });
 
     it('an item restored locally stays at the top of its new section', () => {
-      const [w1, w2] = [wipItem('W1', 'notes'), wipItem('W2', 'notes')];
+      const [w1, w2] = [describedItem('W1', 'notes'), describedItem('W2', 'notes')];
       const discarded = discardedItem('D', { description: unwrap(makeDescription('kept')) });
       const base = boardWith(w1, w2, discarded);
-      const restored: ActiveItem = { ...wipItem('D', 'kept'), id: discarded.id };
-      const local = { ...boardWith(w1, w2), wip: [restored, w1, w2] };
+      const restored: NewItem = { ...describedItem('D', 'kept'), id: discarded.id };
+      const local = { ...boardWith(w1, w2), new: [restored, w1, w2] };
       const remote = boardWith(w1, { ...w2, headline: headline('W2 renamed') }, discarded);
 
       const result = mergedValue(merge(base, local, remote));
 
-      expect(headlines(result.board, 'wip')).toEqual(['D', 'W1', 'W2 renamed']);
+      expect(headlines(result.board, 'new')).toEqual(['D', 'W1', 'W2 renamed']);
       expect(result.board.discarded).toHaveLength(0);
     });
 
-    it('an item reopened locally stays at the top of the WIP section', () => {
-      const w1 = wipItem('W1', 'notes');
+    it('an item reopened locally stays at the top of the New section', () => {
+      const w1 = describedItem('W1', 'notes');
       const done = completeItem('Done', 'text');
       const base = boardWith(w1, done);
-      const reopened: ActiveItem = { ...wipItem('Done', 'text'), id: done.id };
-      const local = { ...boardWith(w1), wip: [reopened, w1] };
+      const reopened: NewItem = { ...describedItem('Done', 'text'), id: done.id };
+      const local = { ...boardWith(w1), new: [reopened, w1] };
       const remote = boardWith({ ...w1, headline: headline('W1 renamed') }, done);
 
       const result = mergedValue(merge(base, local, remote));
 
-      expect(headlines(result.board, 'wip')).toEqual(['Done', 'W1 renamed']);
+      expect(headlines(result.board, 'new')).toEqual(['Done', 'W1 renamed']);
     });
   });
 
@@ -392,7 +389,12 @@ describe('merge', () => {
     });
 
     it('merge(b, b, b) equals b', () => {
-      const b = boardWith(newItem('A'), wipItem('B', 'desc'), completeItem('C', 'desc'), discardedItem('D'));
+      const b = boardWith(
+        newItem('A'),
+        describedItem('B', 'desc'),
+        completeItem('C', 'desc'),
+        discardedItem('D'),
+      );
       expect(ok(merge(b, b, b))).toEqual(b);
     });
   });

@@ -1,4 +1,4 @@
-<!-- version:5 -->
+<!-- version:6 -->
 
 # Learning
 
@@ -9,8 +9,6 @@
 
 ### Rust ownership model
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3NY created:2026-09-15T00:00:00Z -->
-
-## WIP
 
 ### Event sourcing
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3NZ created:2026-09-10T00:00:00Z -->

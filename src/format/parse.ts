@@ -10,7 +10,6 @@ import {
 import { err, ok, type Result } from '../domain/result';
 import { describeBoardValidationError, validateBoard } from '../domain/board';
 import type {
-  ActiveItem,
   Board,
   CompleteItem,
   Description,
@@ -18,6 +17,7 @@ import type {
   IsoTimestamp,
   Item,
   ItemId,
+  NewItem,
   Status,
   Tag,
   TagName,
@@ -32,7 +32,6 @@ export interface ParseError {
 
 const SECTION_SEQUENCE: readonly { readonly section: Status; readonly heading: string }[] = [
   { section: 'new', heading: '## New' },
-  { section: 'wip', heading: '## WIP' },
   { section: 'complete', heading: '## Complete' },
   { section: 'discarded', heading: '## Discarded' },
 ];
@@ -42,13 +41,11 @@ const ID = '([0-9A-Za-z]{26})';
 // Each section has exactly one valid metadata form.
 const META_RE: Record<Status, RegExp> = {
   new: new RegExp(`^<!-- id:${ID} created:(${TS}) -->$`),
-  wip: new RegExp(`^<!-- id:${ID} created:(${TS}) -->$`),
   complete: new RegExp(`^<!-- id:${ID} created:(${TS}) completed:(${TS}) -->$`),
   discarded: new RegExp(`^<!-- id:${ID} created:(${TS}) discarded:(${TS}) -->$`),
 };
 const SECTION_TITLE: Record<Status, string> = {
   new: 'New',
-  wip: 'WIP',
   complete: 'Complete',
   discarded: 'Discarded',
 };
@@ -89,8 +86,7 @@ class Cursor {
 }
 
 interface Accumulator {
-  readonly new: ActiveItem[];
-  readonly wip: ActiveItem[];
+  readonly new: NewItem[];
   readonly complete: CompleteItem[];
   readonly discarded: DiscardedItem[];
 }
@@ -108,7 +104,7 @@ export function parse(text: string): Result<Board, ParseError> {
   const tags = tagsResult.value;
 
   const seenIds = new Set<string>();
-  const acc: Accumulator = { new: [], wip: [], complete: [], discarded: [] };
+  const acc: Accumulator = { new: [], complete: [], discarded: [] };
 
   for (const { section, heading } of SECTION_SEQUENCE) {
     const headingLine = cursor.peek();
@@ -144,7 +140,7 @@ export function parse(text: string): Result<Board, ParseError> {
     });
   }
 
-  const board: Board = { tags, new: acc.new, wip: acc.wip, complete: acc.complete, discarded: acc.discarded };
+  const board: Board = { tags, new: acc.new, complete: acc.complete, discarded: acc.discarded };
   const validated = validateBoard(board);
   if (!validated.ok) {
     return err({
@@ -327,7 +323,7 @@ function parseItem(
         id,
         headline,
         createdAt,
-        statusTemp: 'discarded',
+        status: 'discarded',
         description,
         discardedAt: endedAt,
         tags,
@@ -343,25 +339,15 @@ function parseItem(
         id,
         headline,
         createdAt,
-        statusTemp: 'complete',
+        status: 'complete',
         description,
         completedAt: endedAt,
         tags,
       };
       return ok(item);
     }
-    case 'new':
-    case 'wip': {
-      if (fileSection === 'new' && description !== null) {
-        return err({ line: metaLineNumber, reason: 'An item with a description must be under WIP, not New' });
-      }
-      if (fileSection === 'wip' && description === null) {
-        return err({
-          line: metaLineNumber,
-          reason: 'An item without a description must be under New, not WIP',
-        });
-      }
-      const item: ActiveItem = { id, headline, createdAt, statusTemp: 'active', description, tags };
+    case 'new': {
+      const item: NewItem = { id, headline, createdAt, status: 'new', description, tags };
       return ok(item);
     }
   }
@@ -424,13 +410,9 @@ function parseOptionalDescription(cursor: Cursor): Result<Description | null, Pa
 }
 
 function placeItem(acc: Accumulator, item: Item): void {
-  switch (item.statusTemp) {
-    case 'active':
-      if (item.description === null) {
-        acc.new.push(item);
-      } else {
-        acc.wip.push(item);
-      }
+  switch (item.status) {
+    case 'new':
+      acc.new.push(item);
       return;
     case 'complete':
       acc.complete.push(item);

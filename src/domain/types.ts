@@ -21,50 +21,38 @@ export interface ItemBase {
   readonly tags: readonly TagName[];
 }
 
-export type ActiveItem = ItemBase & {
-  readonly statusTemp: 'active';
+export type NewItem = ItemBase & {
+  readonly status: 'new';
   readonly description: Description | null;
 };
 
 export type CompleteItem = ItemBase & {
-  readonly statusTemp: 'complete';
+  readonly status: 'complete';
   readonly description: Description;
   readonly completedAt: IsoTimestamp;
 };
 
 export type DiscardedItem = ItemBase & {
-  readonly statusTemp: 'discarded';
+  readonly status: 'discarded';
   readonly description: Description | null;
   readonly discardedAt: IsoTimestamp;
 };
 
-export type Item = ActiveItem | CompleteItem | DiscardedItem;
+export type Item = NewItem | CompleteItem | DiscardedItem;
 
 /** The status of an item. The board has one section for each status. */
-export type Status = 'new' | 'wip' | 'complete' | 'discarded';
+export type Status = Item['status'];
 
 export interface Board {
   /** Tag definitions, in display order (the order a new tag is appended in). */
   readonly tags: readonly Tag[];
-  readonly new: readonly ActiveItem[];
-  readonly wip: readonly ActiveItem[];
+  readonly new: readonly NewItem[];
   readonly complete: readonly CompleteItem[];
   readonly discarded: readonly DiscardedItem[];
 }
 
-export function statusOf(item: Item): Status {
-  switch (item.statusTemp) {
-    case 'active':
-      return item.description === null ? 'new' : 'wip';
-    case 'complete':
-      return 'complete';
-    case 'discarded':
-      return 'discarded';
-  }
-}
-
 export function allItems(board: Board): readonly Item[] {
-  return [...board.new, ...board.wip, ...board.complete, ...board.discarded];
+  return [...board.new, ...board.complete, ...board.discarded];
 }
 
 export function findItemById(board: Board, id: ItemId): Item | undefined {

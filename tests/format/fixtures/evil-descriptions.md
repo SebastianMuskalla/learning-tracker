@@ -1,10 +1,8 @@
-<!-- version:5 -->
+<!-- version:6 -->
 
 # Learning
 
 ## New
-
-## WIP
 
 ### Evil description torture test
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3P2 created:2026-09-10T00:00:00Z -->

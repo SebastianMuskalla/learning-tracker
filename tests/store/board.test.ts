@@ -947,7 +947,7 @@ describe('conflict check before local commands are applied again', () => {
       base = unwrap(applyCommand(base, { type: 'add', headline: headline(text) }));
     }
     const idOf = (text: string): ItemId => {
-      const id = [...base.new, ...base.wip].find((item) => item.headline === text)?.id;
+      const id = base.new.find((item) => item.headline === text)?.id;
       if (id === undefined) throw new Error(`fixture has no item ${text}`);
       return id;
     };
@@ -1006,8 +1006,8 @@ describe('conflict check before local commands are applied again', () => {
     expect(board.conflict).toBeNull();
     expect(putFile).toHaveBeenCalledTimes(2);
     const saved = unwrap(parseModule.parse(putText(1)));
-    expect(saved.new.map((i) => i.headline).sort()).toEqual(['B2', 'C2']);
-    expect(saved.wip.map((i) => i.description)).toEqual(['Mine']);
+    expect(saved.new.map((i) => i.headline).sort()).toEqual(['A', 'B2', 'C2']);
+    expect(saved.new.find((i) => i.headline === 'A')?.description).toBe('Mine');
     const [, retried] = putFile.mock.calls[1] as [unknown, { message: string; sha: string }];
     expect(retried.sha).toBe('s2');
     expect(retried.message).toBe('Update learning.md (2 changes)\n\n- Rename "B" → "B2"\n- Describe "A"');
@@ -1063,7 +1063,7 @@ describe('conflict check before local commands are applied again', () => {
     const { board, base, idOf } = await loadedABC();
     // The save gets a 409, and the file on GitHub does not parse.
     putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
-    getFile.mockResolvedValueOnce({ ok: true, value: { text: '<!-- version:5 -->\n\nbroken\n', sha: 's2' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: '<!-- version:6 -->\n\nbroken\n', sha: 's2' } });
     board.applyAndSync({ type: 'setDescription', id: idOf('A'), description: description('Mine') });
     await vi.advanceTimersByTimeAsync(2000);
     expect(board.canWrite).toBe(false);
@@ -1089,7 +1089,7 @@ describe('conflict check before local commands are applied again', () => {
   it('a hand fix of a parse error that changes another item keeps the pending change', async () => {
     const { board, base, idOf } = await loadedABC();
     putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
-    getFile.mockResolvedValueOnce({ ok: true, value: { text: '<!-- version:5 -->\n\nbroken\n', sha: 's2' } });
+    getFile.mockResolvedValueOnce({ ok: true, value: { text: '<!-- version:6 -->\n\nbroken\n', sha: 's2' } });
     board.applyAndSync({ type: 'setDescription', id: idOf('A'), description: description('Mine') });
     await vi.advanceTimersByTimeAsync(2000);
 
@@ -1105,7 +1105,7 @@ describe('conflict check before local commands are applied again', () => {
     const [, saved] = putFile.mock.calls[1] as [unknown, { sha: string }];
     expect(saved.sha).toBe('s3');
     const savedBoard = unwrap(parseModule.parse(putText(1)));
-    expect(savedBoard.wip.map((i) => i.description)).toEqual(['Mine']);
+    expect(savedBoard.new.map((i) => i.description)).toContain('Mine');
     expect(savedBoard.new.map((i) => i.headline)).toContain('C2');
   });
 });
@@ -1649,7 +1649,7 @@ describe('upgrading learning.md', () => {
     vi.useRealTimers();
   });
 
-  it('writes a v1 file as v5 in one commit, with the sha that was read', async () => {
+  it('writes a v1 file as v6 in one commit, with the sha that was read', async () => {
     const { board } = setup();
     getFile.mockResolvedValue({ ok: true, value: { text: V1_TEXT, sha: 'sha-1' } });
     putFile.mockResolvedValue({ ok: true, value: { sha: 'sha-2' } });
@@ -1661,7 +1661,7 @@ describe('upgrading learning.md', () => {
       text: CURRENT_TEXT,
       sha: 'sha-1',
       message:
-        'Upgrade learning.md from format v1 to v5\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence\nv3 → v4: move tags to a list, use full timestamps and lower-case colors, remove empty descriptions, fix New/WIP placement\nv4 → v5: remove the tag "Uncategorized", which is now a reserved name',
+        'Upgrade learning.md from format v1 to v6\n\nv1 → v2: replace the learning-tracker comment with a version line\nv2 → v3: wrap each description in a markdown code fence\nv3 → v4: move tags to a list, use full timestamps and lower-case colors, remove empty descriptions, fix New/WIP placement\nv4 → v5: remove the tag "Uncategorized", which is now a reserved name\nv5 → v6: merge the WIP section into the New section',
     });
     expect(board.sha).toBe('sha-2');
     expect(board.baseText).toBe(CURRENT_TEXT);
@@ -1669,6 +1669,7 @@ describe('upgrading learning.md', () => {
     expect(board.parseError).toBeNull();
   });
 
+  // Scenario "Empty file" of the requirement "Format version of an empty file".
   it('upgrades an empty file through all steps', async () => {
     const { board } = setup();
     getFile.mockResolvedValue({ ok: true, value: { text: '', sha: 'sha-1' } });
@@ -1680,9 +1681,10 @@ describe('upgrading learning.md', () => {
     const input = putFile.mock.calls[0]?.[1];
     expect(input?.text).toBe(CURRENT_TEXT);
     expect(input?.message).toMatch(
-      /^Upgrade learning\.md from format v0 to v5\n\nv0 → v1: .+\nv1 → v2: .+\nv2 → v3: .+\nv3 → v4: .+\nv4 → v5: .+$/,
+      /^Upgrade learning\.md from format v0 to v6\n\nv0 → v1: .+\nv1 → v2: .+\nv2 → v3: .+\nv3 → v4: .+\nv4 → v5: .+\nv5 → v6: .+$/,
     );
     expect(board.sha).toBe('sha-2');
+    expect(board.board).toEqual(emptyBoard());
   });
 
   it('does not write a file that is at the current version', async () => {
@@ -1698,12 +1700,12 @@ describe('upgrading learning.md', () => {
     const { board } = setup();
     getFile.mockResolvedValue({
       ok: true,
-      value: { text: CURRENT_TEXT.replace('version:5', 'version:6'), sha: 'sha-1' },
+      value: { text: CURRENT_TEXT.replace('version:6', 'version:7'), sha: 'sha-1' },
     });
 
     await board.load();
 
-    expect(board.parseError?.reason).toContain('uses format version 6');
+    expect(board.parseError?.reason).toContain('uses format version 7');
     expect(board.parseErrorTooNew).toBe(true);
     expect(board.canWrite).toBe(false);
     expect(board.syncStatus).toBe('error');
@@ -1820,7 +1822,7 @@ describe('upgrading learning.md', () => {
     putFile.mockResolvedValueOnce({ ok: false, error: { type: 'Conflict' } });
     getFile.mockResolvedValueOnce({
       ok: true,
-      value: { text: CURRENT_TEXT.replace('version:5', 'version:6'), sha: 'sha-9' },
+      value: { text: CURRENT_TEXT.replace('version:6', 'version:7'), sha: 'sha-9' },
     });
     await vi.advanceTimersByTimeAsync(1000);
 

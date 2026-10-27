@@ -4,6 +4,14 @@ import { migrateV1 } from './v1-version-line';
 import { migrateV2 } from './v2-desc-fence';
 import { migrateV3 } from './v3-tags-and-cleanup';
 import { migrateV4 } from './v4-reserved-uncategorized';
+import { migrateV5 } from './v5-merge-new-and-wip';
 
 /** Ordered by `from`. The migration at index `i` goes from version `i` to version `i + 1`. */
-export const MIGRATIONS: readonly Migration[] = [migrateV0, migrateV1, migrateV2, migrateV3, migrateV4];
+export const MIGRATIONS: readonly Migration[] = [
+  migrateV0,
+  migrateV1,
+  migrateV2,
+  migrateV3,
+  migrateV4,
+  migrateV5,
+];

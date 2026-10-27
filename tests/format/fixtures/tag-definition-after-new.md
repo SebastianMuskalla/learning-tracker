@@ -1,12 +1,10 @@
-<!-- version:5 -->
+<!-- version:6 -->
 
 # Learning
 
 ## New
 
 <!-- tag:vue color:#aacbee -->
-
-## WIP
 
 ## Complete
 

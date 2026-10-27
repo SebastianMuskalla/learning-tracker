@@ -3,22 +3,22 @@ import { mount } from '@vue/test-utils';
 import { createPinia } from 'pinia';
 import { describe, expect, it } from 'vitest';
 import ItemCard from '../../src/components/ItemCard.vue';
-import { generateItemId, makeHeadline, makeIsoTimestamp } from '../../src/domain/factories';
+import { generateItemId, makeDescription, makeHeadline, makeIsoTimestamp } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
-import type { ActiveItem } from '../../src/domain/types';
+import type { NewItem } from '../../src/domain/types';
 
-const item: ActiveItem = {
+const item: NewItem = {
   id: generateItemId(),
   headline: unwrap(makeHeadline('Item')),
   createdAt: unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z')),
-  statusTemp: 'active',
+  status: 'new',
   description: null,
   tags: [],
 };
 
-function mountCard() {
+function mountCard(card: NewItem = item) {
   return mount(ItemCard, {
-    props: { item, section: 'new', tags: [] },
+    props: { item: card, section: 'new', tags: [] },
     global: { plugins: [createPinia()] },
     attachTo: document.body,
   });
@@ -77,6 +77,22 @@ describe('ItemCard rename', () => {
     await input.trigger('blur');
 
     expect(wrapper.emitted('editHeadline')).toEqual([['Renamed']]);
+    wrapper.unmount();
+  });
+});
+
+describe('ItemCard Complete button', () => {
+  // Scenario "Card without a description" of the requirement "No Complete button on a card without a description".
+  it('shows no Complete button for a New item without a description', () => {
+    const wrapper = mountCard();
+    expect(wrapper.find('button[title="Complete"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('shows the Complete button for a New item with a description, and emits complete on a click', async () => {
+    const wrapper = mountCard({ ...item, description: unwrap(makeDescription('notes')) });
+    await wrapper.get('button[title="Complete"]').trigger('click');
+    expect(wrapper.emitted('complete')).toHaveLength(1);
     wrapper.unmount();
   });
 });

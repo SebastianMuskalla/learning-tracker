@@ -12,7 +12,7 @@ import {
 } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
 import type {
-  ActiveItem,
+  NewItem,
   Board,
   CompleteItem,
   Description,
@@ -113,17 +113,17 @@ function arbitraryItemTags(tagNames: readonly TagName[]): fc.Arbitrary<readonly 
   return fc.subarray([...tagNames]);
 }
 
-function arbitraryActiveItem(
+function arbitraryNewItem(
   description: fc.Arbitrary<Description | null>,
   tags: fc.Arbitrary<readonly TagName[]>,
-): fc.Arbitrary<ActiveItem> {
+): fc.Arbitrary<NewItem> {
   return fc
     .tuple(arbitraryHeadline, arbitraryDate, description, tags)
     .map(([headline, createdAt, desc, itemTags]) => ({
       id: generateItemId(),
       headline,
       createdAt,
-      statusTemp: 'active' as const,
+      status: 'new' as const,
       description: desc,
       tags: itemTags,
     }));
@@ -136,7 +136,7 @@ function arbitraryCompleteItem(tags: fc.Arbitrary<readonly TagName[]>): fc.Arbit
       id: generateItemId(),
       headline,
       createdAt,
-      statusTemp: 'complete' as const,
+      status: 'complete' as const,
       description,
       completedAt,
       tags: itemTags,
@@ -150,7 +150,7 @@ function arbitraryDiscardedItem(tags: fc.Arbitrary<readonly TagName[]>): fc.Arbi
       id: generateItemId(),
       headline,
       createdAt,
-      statusTemp: 'discarded' as const,
+      status: 'discarded' as const,
       description,
       discardedAt,
       tags: itemTags,
@@ -161,15 +161,13 @@ const arbitraryBoard: fc.Arbitrary<Board> = arbitraryTagList.chain((tagList) => 
   const tags = arbitraryItemTags(tagList.map((t) => t.name));
   return fc
     .tuple(
-      fc.array(arbitraryActiveItem(fc.constant(null), tags), { maxLength: 3 }),
-      fc.array(arbitraryActiveItem(arbitraryNonEmptyDescription, tags), { maxLength: 3 }),
+      fc.array(arbitraryNewItem(arbitraryOptionalDescription, tags), { maxLength: 6 }),
       fc.array(arbitraryCompleteItem(tags), { maxLength: 3 }),
       fc.array(arbitraryDiscardedItem(tags), { maxLength: 3 }),
     )
-    .map(([newItems, wipItems, complete, discarded]) => ({
+    .map(([newItems, complete, discarded]) => ({
       tags: tagList,
       new: newItems,
-      wip: wipItems,
       complete,
       discarded,
     }));
@@ -215,10 +213,10 @@ describe('serialize/parse round trip', () => {
       const md = new MarkdownIt();
       fc.assert(
         fc.property(arbitraryBoard, (board) => {
-          const items = [...board.new, ...board.wip, ...board.complete, ...board.discarded];
+          const items = [...board.new, ...board.complete, ...board.discarded];
           const tokens = md.parse(serialize(board), {});
           const headings = tokens.filter((token) => token.type === 'heading_open');
-          expect(headings).toHaveLength(1 + 4 + items.length);
+          expect(headings).toHaveLength(1 + 3 + items.length);
           const fences = tokens.filter((token) => token.type === 'fence');
           const descriptions = items.flatMap((item) => (item.description === null ? [] : [item.description]));
           expect(fences.map((token) => token.info)).toEqual(descriptions.map(() => 'markdown'));

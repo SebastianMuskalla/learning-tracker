@@ -1,4 +1,4 @@
-<!-- version:5 -->
+<!-- version:6 -->
 
 # Learning
 
@@ -19,8 +19,6 @@
 <!-- id:01M2KCX2QCRJYQJSQW6XNKE3P3 created:2026-09-15T00:00:00Z -->
 - vue
 - rust
-
-## WIP
 
 ## Complete
 

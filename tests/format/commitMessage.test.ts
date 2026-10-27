@@ -8,16 +8,18 @@ import {
 } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
 import type { Command } from '../../src/domain/commands';
-import type { ActiveItem } from '../../src/domain/types';
+import type { NewItem } from '../../src/domain/types';
 import { combineMessages, commitMessage, migrationMessage } from '../../src/format/commitMessage';
+import { upgrade } from '../../src/format/migrations/run';
+import { CURRENT_VERSION } from '../../src/format/version';
 
 const CREATED = unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z'));
 
-const item: ActiveItem = {
+const item: NewItem = {
   id: generateItemId(),
   headline: unwrap(makeHeadline('Learn Vue composables')),
   createdAt: CREATED,
-  statusTemp: 'active',
+  status: 'new',
   description: null,
   tags: [],
 };
@@ -34,8 +36,8 @@ describe('commitMessage — items', () => {
     [{ type: 'uncomplete', id: item.id }, 'Reopen "Learn Vue composables"'],
     [{ type: 'discard', id: item.id }, 'Discard "Learn Vue composables"'],
     [{ type: 'restore', id: item.id }, 'Restore "Learn Vue composables"'],
-    [{ type: 'reorder', section: 'wip', fromIndex: 0, toIndex: 1 }, 'Reorder WIP'],
     [{ type: 'delete', id: item.id }, 'Delete "Learn Vue composables"'],
+    [{ type: 'reorder', section: 'new', fromIndex: 0, toIndex: 1 }, 'Reorder New'],
   ])('%j', (command, expected) => {
     expect(commitMessage(command, item)).toBe(expected);
   });
@@ -106,6 +108,21 @@ describe('migrationMessage', () => {
       ]),
     ).toBe(
       'Upgrade learning.md from format v0 to v2\n\nv0 → v1: create the board\nv1 → v2: replace the comment',
+    );
+  });
+});
+
+describe('migrationMessage for an upgrade from version 4', () => {
+  // Scenario "Body lines" of the requirement "Upgrade commit".
+  it('has one body line for each step', () => {
+    const result = upgrade(
+      '<!-- version:4 -->\n\n# Learning\n\n## New\n\n## WIP\n\n## Complete\n\n## Discarded\n',
+    );
+    if (!result.ok || result.value.kind !== 'migrated') throw new Error('expected a migration');
+    expect(migrationMessage(result.value.from, CURRENT_VERSION, result.value.steps)).toBe(
+      'Upgrade learning.md from format v4 to v6\n\n' +
+        'v4 → v5: remove the tag "Uncategorized", which is now a reserved name\n' +
+        'v5 → v6: merge the WIP section into the New section',
     );
   });
 });

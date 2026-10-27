@@ -1,10 +1,9 @@
 import { err, ok, type Result } from './result';
-import { allItems, statusOf, type Board, type Item, type Tag, type TagName } from './types';
+import { allItems, type Board, type Item, type Status, type Tag, type TagName } from './types';
 
 export type BoardValidationError =
   | { readonly type: 'DuplicateId'; readonly id: string }
   | { readonly type: 'MisplacedItem'; readonly id: string; readonly expectedSection: string }
-  | { readonly type: 'ActiveItemInWrongArray'; readonly id: string }
   | { readonly type: 'DuplicateTagName'; readonly name: string }
   | { readonly type: 'UndefinedItemTag'; readonly id: string; readonly name: string }
   | { readonly type: 'DuplicateItemTag'; readonly id: string; readonly name: string };
@@ -16,8 +15,6 @@ export function describeBoardValidationError(error: BoardValidationError): strin
       return `the id ${error.id} is used by more than one item`;
     case 'MisplacedItem':
       return `item ${error.id} belongs in section ${error.expectedSection}`;
-    case 'ActiveItemInWrongArray':
-      return `item ${error.id} is in the wrong one of New and WIP`;
     case 'DuplicateTagName':
       return `the tag "${error.name}" is defined more than once`;
     case 'UndefinedItemTag':
@@ -28,7 +25,7 @@ export function describeBoardValidationError(error: BoardValidationError): strin
 }
 
 export function emptyBoard(): Board {
-  return { tags: [], new: [], wip: [], complete: [], discarded: [] };
+  return { tags: [], new: [], complete: [], discarded: [] };
 }
 
 export function validateBoard(board: Board): Result<Board, BoardValidationError> {
@@ -63,19 +60,8 @@ export function validateBoard(board: Board): Result<Board, BoardValidationError>
     }
   }
 
-  for (const item of board.new) {
-    if (item.description !== null) {
-      return err({ type: 'ActiveItemInWrongArray', id: item.id });
-    }
-  }
-  for (const item of board.wip) {
-    if (item.description === null) {
-      return err({ type: 'ActiveItemInWrongArray', id: item.id });
-    }
-  }
-
   for (const item of allItems(board)) {
-    const expected = statusOf(item);
+    const expected = item.status;
     const actual = whichSectionArray(board, item.id);
     if (actual !== expected) {
       return err({ type: 'MisplacedItem', id: item.id, expectedSection: expected });
@@ -85,21 +71,17 @@ export function validateBoard(board: Board): Result<Board, BoardValidationError>
   return ok(board);
 }
 
-function whichSectionArray(board: Board, id: string): 'new' | 'wip' | 'complete' | 'discarded' | undefined {
+function whichSectionArray(board: Board, id: string): Status | undefined {
   if (board.new.some((item) => item.id === id)) return 'new';
-  if (board.wip.some((item) => item.id === id)) return 'wip';
   if (board.complete.some((item) => item.id === id)) return 'complete';
   if (board.discarded.some((item) => item.id === id)) return 'discarded';
   return undefined;
 }
 
-export { statusOf };
-
 export function boardsEqual(a: Board, b: Board): boolean {
   return (
     tagListsEqual(a.tags, b.tags) &&
     itemListsEqual(a.new, b.new) &&
-    itemListsEqual(a.wip, b.wip) &&
     itemListsEqual(a.complete, b.complete) &&
     itemListsEqual(a.discarded, b.discarded)
   );
@@ -122,7 +104,7 @@ function itemListsEqual(a: readonly Item[], b: readonly Item[]): boolean {
 
 /** Exported for the merge algorithm, which also needs to compare two items for equality. */
 export function itemsEqual(a: Item, b: Item | undefined): boolean {
-  if (b?.statusTemp !== a.statusTemp) return false;
+  if (b?.status !== a.status) return false;
   if (
     a.id !== b.id ||
     a.headline !== b.headline ||
@@ -132,7 +114,7 @@ export function itemsEqual(a: Item, b: Item | undefined): boolean {
     return false;
   }
   if (!tagArraysEqual(a.tags, b.tags)) return false;
-  if (a.statusTemp === 'complete' && b.statusTemp === 'complete') return a.completedAt === b.completedAt;
-  if (a.statusTemp === 'discarded' && b.statusTemp === 'discarded') return a.discardedAt === b.discardedAt;
+  if (a.status === 'complete' && b.status === 'complete') return a.completedAt === b.completedAt;
+  if (a.status === 'discarded' && b.status === 'discarded') return a.discardedAt === b.discardedAt;
   return true;
 }

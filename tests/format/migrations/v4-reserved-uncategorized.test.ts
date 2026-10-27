@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { migrateV4 } from '../../../src/format/migrations/v4-reserved-uncategorized';
+import { migrateV5 } from '../../../src/format/migrations/v5-merge-new-and-wip';
 import { parse } from '../../../src/format/parse';
 
 const root = fileURLToPath(new URL('./fixtures/v4/', import.meta.url));
@@ -40,6 +41,9 @@ describe('migration 4 → 5, frozen fixtures', () => {
   it.each(names)('%s gives the expected text, which the parser accepts', (name) => {
     const output = migrated(readFileSync(`${root}${name}`, 'utf-8'));
     expect(output).toBe(readFileSync(`${root}${name.replace(/\.md$/, '.expected.md')}`, 'utf-8'));
-    expect(parse(output).ok).toBe(true);
+    // The parser reads the current version only, so the output goes through the next migration first.
+    const next = migrateV5.migrate(output);
+    if (!next.ok) throw new Error(next.error.reason);
+    expect(parse(next.value).ok).toBe(true);
   });
 });

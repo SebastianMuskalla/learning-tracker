@@ -1,4 +1,4 @@
-<!-- version:5 -->
+<!-- version:6 -->
 
 # Learning
 
@@ -6,8 +6,6 @@
 <!-- tag:Vue color:#f6c9a4 -->
 
 ## New
-
-## WIP
 
 ## Complete
 

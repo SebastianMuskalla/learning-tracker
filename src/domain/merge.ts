@@ -3,16 +3,7 @@
 // throw one side away (see "Retry without a real conflict" in openspec/specs/sync/spec.md).
 import { itemsEqual, validateBoard } from './board';
 import { err, ok, type Result } from './result';
-import {
-  allItems,
-  statusOf,
-  type Board,
-  type Item,
-  type ItemId,
-  type Status,
-  type Tag,
-  type TagName,
-} from './types';
+import { allItems, type Board, type Item, type ItemId, type Status, type Tag, type TagName } from './types';
 
 export type MergeConflict =
   | { readonly type: 'DivergentEdit'; readonly id: ItemId }
@@ -77,16 +68,12 @@ function mergeWith(
   );
 
   const newItems: Item[] = [];
-  const wipItems: Item[] = [];
   const completeItems: Item[] = [];
   const discardedItems: Item[] = [];
   for (const item of strippedItems) {
-    switch (statusOf(item)) {
+    switch (item.status) {
       case 'new':
         newItems.push(item);
-        break;
-      case 'wip':
-        wipItems.push(item);
         break;
       case 'complete':
         completeItems.push(item);
@@ -106,13 +93,12 @@ function mergeWith(
 
   const board: Board = {
     tags: orderTags(mergedTags.values, remote, local),
-    new: ordered('new', newItems).filter(isActive),
-    wip: ordered('wip', wipItems).filter(isActive),
+    new: ordered('new', newItems).filter(isNew),
     complete: ordered('complete', completeItems).filter(isComplete),
     discarded: ordered('discarded', discardedItems).filter(isDiscarded),
   };
 
-  // statusOf() and the per-item resolution above already guarantee a structurally valid
+  // The sort by status and the per-item resolution above already guarantee a structurally valid
   // board; this is a defensive backstop, not an expected path.
   const validated = validateBoard(board);
   if (!validated.ok) {
@@ -155,16 +141,16 @@ function choose<T>(
   return kept(side === 'local' ? local : remote);
 }
 
-function isActive(item: Item): item is Extract<Item, { statusTemp: 'active' }> {
-  return item.statusTemp === 'active';
+function isNew(item: Item): item is Extract<Item, { status: 'new' }> {
+  return item.status === 'new';
 }
 
-function isComplete(item: Item): item is Extract<Item, { statusTemp: 'complete' }> {
-  return item.statusTemp === 'complete';
+function isComplete(item: Item): item is Extract<Item, { status: 'complete' }> {
+  return item.status === 'complete';
 }
 
-function isDiscarded(item: Item): item is Extract<Item, { statusTemp: 'discarded' }> {
-  return item.statusTemp === 'discarded';
+function isDiscarded(item: Item): item is Extract<Item, { status: 'discarded' }> {
+  return item.status === 'discarded';
 }
 
 function mergeItems(base: Board, local: Board, remote: Board, side: MergeSide | undefined): PartMerge<Item> {

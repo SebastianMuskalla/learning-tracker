@@ -1,4 +1,4 @@
-<!-- version:5 -->
+<!-- version:6 -->
 
 # Learning
 
@@ -12,8 +12,6 @@
 - vue
 
 - rust
-
-## WIP
 
 ## Complete
 

@@ -8,7 +8,7 @@ import {
   makeTagName,
 } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
-import type { ActiveItem, Board, Tag } from '../../src/domain/types';
+import type { Board, NewItem, Tag } from '../../src/domain/types';
 
 const CREATED = unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z'));
 const HEADLINE = unwrap(makeHeadline('x'));
@@ -17,12 +17,12 @@ function tag(name: string, color: string): Tag {
   return { name: unwrap(makeTagName(name)), color: unwrap(makeHexColor(color)) };
 }
 
-function activeItem(overrides: Partial<ActiveItem> = {}): ActiveItem {
+function newItem(overrides: Partial<NewItem> = {}): NewItem {
   return {
     id: generateItemId(),
     headline: HEADLINE,
     createdAt: CREATED,
-    statusTemp: 'active',
+    status: 'new',
     description: null,
     tags: [],
     ...overrides,
@@ -34,28 +34,33 @@ describe('validateBoard', () => {
     expect(validateBoard(emptyBoard()).ok).toBe(true);
   });
 
-  it('rejects a New item that has a description', () => {
-    const board: Board = { ...emptyBoard(), new: [activeItem({ description: 'oops' as never })] };
-    const result = validateBoard(board);
-    expect(result.ok).toBe(false);
+  it('accepts a New item with a description and a New item without one', () => {
+    const board: Board = {
+      ...emptyBoard(),
+      new: [newItem({ description: 'notes' as never }), newItem({ description: null })],
+    };
+    expect(validateBoard(board).ok).toBe(true);
   });
 
-  it('rejects a WIP item that has no description', () => {
-    const board: Board = { ...emptyBoard(), wip: [activeItem({ description: null })] };
-    const result = validateBoard(board);
-    expect(result.ok).toBe(false);
+  it('rejects an item in the section of another status', () => {
+    const item = newItem();
+    const board: Board = { ...emptyBoard(), discarded: [item as never] };
+    expect(validateBoard(board)).toMatchObject({
+      ok: false,
+      error: { type: 'MisplacedItem', id: item.id, expectedSection: 'new' },
+    });
   });
 
   it('rejects duplicate ids across sections', () => {
-    const item = activeItem();
-    const board: Board = { ...emptyBoard(), new: [item], wip: [{ ...item, description: 'x' as never }] };
+    const item = newItem();
+    const board: Board = { ...emptyBoard(), new: [item, { ...item, description: 'x' as never }] };
     const result = validateBoard(board);
     expect(result).toMatchObject({ ok: false, error: { type: 'DuplicateId', id: item.id } });
   });
 
   it('rejects an item that names a tag not defined on the board', () => {
     const vue = tag('vue', '#aacbee');
-    const item = activeItem({ tags: [vue.name] });
+    const item = newItem({ tags: [vue.name] });
     const board: Board = { ...emptyBoard(), new: [item] };
     const result = validateBoard(board);
     expect(result).toMatchObject({
@@ -72,7 +77,7 @@ describe('validateBoard', () => {
 
   it('rejects the same tag listed twice on one item', () => {
     const vue = tag('vue', '#aacbee');
-    const item = activeItem({ tags: [vue.name, vue.name] });
+    const item = newItem({ tags: [vue.name, vue.name] });
     const board: Board = { ...emptyBoard(), tags: [vue], new: [item] };
     const result = validateBoard(board);
     expect(result).toMatchObject({
@@ -84,21 +89,21 @@ describe('validateBoard', () => {
 
 describe('boardsEqual', () => {
   it('is true for structurally identical boards', () => {
-    const item = activeItem();
+    const item = newItem();
     const a: Board = { ...emptyBoard(), new: [item] };
     const b: Board = { ...emptyBoard(), new: [{ ...item }] };
     expect(boardsEqual(a, b)).toBe(true);
   });
 
   it('is false when an item field differs', () => {
-    const item = activeItem();
+    const item = newItem();
     const a: Board = { ...emptyBoard(), new: [item] };
     const b: Board = { ...emptyBoard(), new: [{ ...item, headline: 'different' as never }] };
     expect(boardsEqual(a, b)).toBe(false);
   });
 
   it('is false when list lengths differ', () => {
-    const a: Board = { ...emptyBoard(), new: [activeItem()] };
+    const a: Board = { ...emptyBoard(), new: [newItem()] };
     const b: Board = emptyBoard();
     expect(boardsEqual(a, b)).toBe(false);
   });
@@ -111,7 +116,7 @@ describe('boardsEqual', () => {
 
   it('is false when an item differs only in its tags', () => {
     const vue = tag('vue', '#aacbee');
-    const item = activeItem();
+    const item = newItem();
     const a: Board = { ...emptyBoard(), tags: [vue], new: [item] };
     const b: Board = { ...emptyBoard(), tags: [vue], new: [{ ...item, tags: [vue.name] }] };
     expect(boardsEqual(a, b)).toBe(false);

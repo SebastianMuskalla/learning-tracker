@@ -47,12 +47,12 @@ function first<T>(list: readonly T[]): T {
 }
 
 describe('add', () => {
-  it('prepends a new active item with no description', () => {
+  it('prepends a New item with no description', () => {
     const board = run(emptyBoard(), { type: 'add', headline: headline('Rust ownership') }, DAY_1);
     expect(board.new).toHaveLength(1);
     expect(first(board.new)).toMatchObject({
       headline: 'Rust ownership',
-      statusTemp: 'active',
+      status: 'new',
       description: null,
       createdAt: DAY_1,
       tags: [],
@@ -68,22 +68,21 @@ describe('add', () => {
 });
 
 describe('setDescription', () => {
-  it('moves an item from New to WIP when a description is added', () => {
+  it('keeps the status New when a description is added', () => {
     let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') });
-    expect(board.new).toHaveLength(0);
-    expect(board.wip).toHaveLength(1);
-    expect(first(board.wip).description).toBe('notes');
+    expect(board.new).toHaveLength(1);
+    expect(first(board.new)).toMatchObject({ status: 'new', description: 'notes' });
   });
 
-  it('moves an item back from WIP to New when the description is cleared', () => {
+  it('keeps the status New when the description is cleared', () => {
     let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') });
     board = run(board, { type: 'setDescription', id, description: null });
-    expect(board.wip).toHaveLength(0);
     expect(board.new).toHaveLength(1);
+    expect(first(board.new)).toMatchObject({ status: 'new', description: null });
   });
 
   it('rejects clearing the description of a Complete item', () => {
@@ -106,14 +105,14 @@ describe('setDescription', () => {
 });
 
 describe('position after a status change', () => {
-  /** New: "Plain". WIP: "Other", "Moving". Complete: "Done". */
-  function sampleBoard(): { board: Board; id: (text: string) => Board['wip'][number]['id'] } {
+  /** New: "Plain", "Other", "Moving" (the last 2 with a description). Complete: "Done". */
+  function sampleBoard(): { board: Board; id: (text: string) => Board['new'][number]['id'] } {
     let board = emptyBoard();
     for (const text of ['Done', 'Moving', 'Other', 'Plain']) {
       board = run(board, { type: 'add', headline: headline(text) });
     }
     const id = (text: string) => {
-      const found = [...board.new, ...board.wip].find((item) => item.headline === text)?.id;
+      const found = board.new.find((item) => item.headline === text)?.id;
       if (found === undefined) throw new Error(`no item ${text}`);
       return found;
     };
@@ -124,18 +123,23 @@ describe('position after a status change', () => {
     return { board, id };
   }
 
-  it('puts an item that gets a description at the top of WIP', () => {
-    let board = run(sampleBoard().board, { type: 'add', headline: headline('Fresh') });
-    const fresh = first(board.new).id;
-    board = run(board, { type: 'setDescription', id: fresh, description: description('notes') });
-    expect(board.wip.map((item) => item.headline)).toEqual(['Fresh', 'Other', 'Moving']);
+  // Scenario "Add a description" of the requirement "Description change keeps the position".
+  it('keeps the position of an item that gets a description', () => {
+    let board = emptyBoard();
+    for (const text of ['Rust', 'Docker', 'Git']) {
+      board = run(board, { type: 'add', headline: headline(text) });
+    }
+    const docker = board.new[1]?.id;
+    if (docker === undefined) throw new Error('no item Docker');
+    board = run(board, { type: 'setDescription', id: docker, description: description('notes') });
+    expect(board.new.map((item) => item.headline)).toEqual(['Git', 'Docker', 'Rust']);
+    expect(board.new[1]).toMatchObject({ status: 'new', description: 'notes' });
   });
 
-  it('puts an item that loses its description at the top of New', () => {
+  it('keeps the position of an item that loses its description', () => {
     const sample = sampleBoard();
-    let board = run(sample.board, { type: 'add', headline: headline('Newest') });
-    board = run(board, { type: 'setDescription', id: sample.id('Moving'), description: null });
-    expect(board.new.map((item) => item.headline)).toEqual(['Moving', 'Newest', 'Plain']);
+    const board = run(sample.board, { type: 'setDescription', id: sample.id('Other'), description: null });
+    expect(board.new.map((item) => item.headline)).toEqual(['Plain', 'Other', 'Moving']);
   });
 
   it('puts a completed item at the top of Complete', () => {
@@ -153,12 +157,12 @@ describe('complete / uncomplete', () => {
     expect(result).toEqual({ ok: false, error: { type: 'CompleteRequiresDescription', id } });
   });
 
-  it('moves a WIP item to Complete, stamping completedAt and dropping nothing else', () => {
+  it('moves a New item with a description to Complete, stamping completedAt and dropping nothing else', () => {
     let board = run(emptyBoard(), { type: 'add', headline: headline('Item') }, DAY_1);
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') }, DAY_1);
     board = run(board, { type: 'complete', id }, DAY_2);
-    expect(board.wip).toHaveLength(0);
+    expect(board.new).toHaveLength(0);
     expect(first(board.complete)).toMatchObject({
       id,
       completedAt: DAY_2,
@@ -167,14 +171,17 @@ describe('complete / uncomplete', () => {
     });
   });
 
-  it('reopens a Complete item back to WIP', () => {
+  // Scenario "Reopen" of the requirement "Reopen an item".
+  it('reopens a Complete item to the top of New', () => {
     let board = run(emptyBoard(), { type: 'add', headline: headline('Item') });
     const id = first(board.new).id;
     board = run(board, { type: 'setDescription', id, description: description('notes') });
     board = run(board, { type: 'complete', id }, DAY_2);
+    board = run(board, { type: 'add', headline: headline('Other') });
     board = run(board, { type: 'uncomplete', id });
     expect(board.complete).toHaveLength(0);
-    expect(first(board.wip)).toMatchObject({ id, statusTemp: 'active', description: 'notes' });
+    expect(board.new.map((item) => item.headline)).toEqual(['Item', 'Other']);
+    expect(first(board.new)).toMatchObject({ id, status: 'new', description: 'notes' });
   });
 
   it('rejects uncompleting a non-Complete item', () => {
@@ -194,7 +201,7 @@ describe('complete / uncomplete', () => {
     board = run(board, { type: 'complete', id }, DAY_2);
     expect(first(board.complete).tags).toEqual([vue]);
     board = run(board, { type: 'uncomplete', id });
-    expect(first(board.wip).tags).toEqual([vue]);
+    expect(first(board.new).tags).toEqual([vue]);
   });
 });
 
@@ -217,7 +224,7 @@ describe('discard / restore', () => {
       id,
       headline: 'Item',
       createdAt: DAY_1,
-      statusTemp: 'discarded',
+      status: 'discarded',
       description: 'notes',
       discardedAt: DAY_2,
       tags: [],
@@ -232,7 +239,9 @@ describe('discard / restore', () => {
     expect(result).toEqual({ ok: false, error: { type: 'AlreadyDiscarded', id } });
   });
 
-  it('restores to New when there is no description, WIP when there is one', () => {
+  // Scenarios "Restore without description" and "Restore with description" of the requirement
+  // "Restore an item".
+  it('restores to the top of New, with and without a description', () => {
     let board = run(emptyBoard(), { type: 'add', headline: headline('bare') });
     const bareId = first(board.new).id;
     board = run(board, { type: 'add', headline: headline('with desc') });
@@ -245,8 +254,8 @@ describe('discard / restore', () => {
     board = run(board, { type: 'restore', id: bareId });
     board = run(board, { type: 'restore', id: describedId });
 
-    expect(board.new.map((i) => i.id)).toContain(bareId);
-    expect(board.wip.map((i) => i.id)).toContain(describedId);
+    expect(board.new.map((i) => i.id)).toEqual([describedId, bareId]);
+    expect(first(board.new)).toMatchObject({ status: 'new', description: 'notes' });
   });
 
   it("keeps the item's tags across discard and restore", () => {

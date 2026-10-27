@@ -12,10 +12,10 @@ describe('linkKeywordsFor', () => {
   it('links only to Complete items', () => {
     const builder = new BoardBuilder()
       .add('OWASP')
-      .add('Docker', 'wip')
-      .add('Kubernetes', 'new')
+      .add('Docker', 'new')
+      .add('Kubernetes', 'new', null)
       .add('Terraform', 'discarded')
-      .add('Source', 'wip');
+      .add('Source', 'new');
     expect(linked(builder, 'Source')).toEqual(['OWASP → OWASP']);
   });
 
@@ -29,20 +29,20 @@ describe('linkKeywordsFor', () => {
       .add('Risk assessment')
       .add('risk-Assessment (other)')
       .add('RISKASSESSMENT, Other')
-      .add('Source', 'wip');
+      .add('Source', 'new');
     expect(linked(builder, 'Source')).toEqual(['Other → RISKASSESSMENT, Other']);
     expect(linked(builder, 'Risk assessment')).toEqual(['Other → RISKASSESSMENT, Other']);
   });
 
   it('does not treat Risk and Risks as a collision', () => {
-    const builder = new BoardBuilder().add('Risk').add('Risks').add('Source', 'wip');
+    const builder = new BoardBuilder().add('Risk').add('Risks').add('Source', 'new');
     expect(linked(builder, 'Source')).toEqual(['Risk → Risk', 'Risks → Risks']);
   });
 });
 
 describe('keywordInfos', () => {
   it('reports the other Complete items that give the same keyword', () => {
-    const builder = new BoardBuilder().add('OWASP (one)').add('owasp (two)').add('Draft', 'wip');
+    const builder = new BoardBuilder().add('OWASP (one)').add('owasp (two)').add('Draft', 'new');
     const index = buildKeywordIndex(builder.board);
     const infos = keywordInfos(index, 'OWASP, XSS', builder.id('Draft'));
     expect(infos.map((info) => [info.keyword.text, [...info.alsoUsedBy].sort()])).toEqual([
@@ -52,7 +52,7 @@ describe('keywordInfos', () => {
   });
 
   it('does not report the item itself', () => {
-    const builder = new BoardBuilder().add('OWASP').add('OWASP (again)', 'wip');
+    const builder = new BoardBuilder().add('OWASP').add('OWASP (again)', 'new');
     const index = buildKeywordIndex(builder.board);
     expect(keywordInfos(index, 'OWASP', builder.id('OWASP'))[0]?.alsoUsedBy).toEqual([]);
     expect(keywordInfos(index, 'OWASP (again)', builder.id('OWASP (again)'))[0]?.alsoUsedBy).toEqual([

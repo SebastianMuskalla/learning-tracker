@@ -9,48 +9,44 @@ status of, reorder, and delete items.
 
 ### Requirement: Statuses
 
-Each item SHALL have exactly one status: New, WIP, Complete, or Discarded.
+Each item SHALL have exactly one status: New, Complete, or Discarded.
 
 #### Scenario: Status after completion
 
-- **WHEN** the user completes an item with the status WIP
-- **THEN** the item has the status Complete and no longer has the status WIP
+- **WHEN** the user completes an item with the status New
+- **THEN** the item has the status Complete and no longer has the status New
 
-### Requirement: Status New
+### Requirement: Default status
 
-IF an item has neither the status Complete nor the status Discarded, and the item has no description, THEN the item SHALL have the status New.
+IF an item has neither the status Complete nor the status Discarded, THEN the item SHALL have the status New.
 
-#### Scenario: Removing the description changes the status to New
-
-- **WHEN** the user removes the whole description of an item with the status WIP
-- **THEN** the item has the status New and moves to the top of the New section
-
-### Requirement: Status WIP
-
-IF an item has neither the status Complete nor the status Discarded, and the item has a description, THEN the item SHALL have the status WIP.
-
-#### Scenario: Description changes the status to WIP
+#### Scenario: Adding a description keeps the status New
 
 - **WHEN** the user adds a description to an item with the status New
-- **THEN** the item has the status WIP and moves to the top of the WIP section
+- **THEN** the item has the status New
+
+#### Scenario: Removing the description keeps the status New
+
+- **WHEN** the user removes the whole description of an item with the status New
+- **THEN** the item has the status New
 
 ### Requirement: Sections
 
-The board SHALL show one section for each status, in the order New, WIP, Complete, Discarded.
+The board SHALL show one section for each status, in the order New, Complete, Discarded.
 
 #### Scenario: Empty section
 
 - **WHEN** no item has the status Discarded
 - **THEN** the board shows an empty Discarded section
 
-### Requirement: Section content
+### Requirement: Cards in a section
 
 Each section SHALL show the cards of the items with the status of the section.
 
-#### Scenario: Card in the WIP section
+#### Scenario: Card in the New section
 
-- **WHEN** the item "Docker" has the status WIP
-- **THEN** the card of "Docker" appears in the WIP section and in no other section
+- **WHEN** the item "Docker" has the status New
+- **THEN** the card of "Docker" appears in the New section and in no other section
 
 ### Requirement: Add an item
 
@@ -75,6 +71,17 @@ WHEN the app adds an item or changes the status of an item, the app SHALL place 
 - **WHEN** the Complete section contains "Git" and the user completes "Docker"
 - **THEN** "Docker" is first in the Complete section
 
+### Requirement: Description change keeps the position
+
+WHEN the user adds or removes the description of an item with the status New, the app SHALL keep the item at the same position in the New section.
+
+**Rationale**: The status of the item does not change, so the card stays where the user put the card.
+
+#### Scenario: Add a description
+
+- **WHEN** the New section contains "Git", "Docker", and "Rust" in this order, and the user adds a description to "Docker"
+- **THEN** the New section contains "Git", "Docker", and "Rust" in this order, and "Docker" has the status New
+
 ### Requirement: Headline validation
 
 The app SHALL reject a headline that is empty, that has more than one line, or that contains `<!--`.
@@ -88,30 +95,35 @@ The app SHALL reject a headline that is empty, that has more than one line, or t
 
 ### Requirement: Complete an item
 
-The app SHALL change the status of an item from New or WIP to Complete only WHEN the item has a description.
+The app SHALL change the status of an item from New to Complete only WHEN the item has a description.
 
 #### Scenario: Item without description
 
-- **WHEN** an item with the status New is open in the detail view
+- **WHEN** an item with the status New and no description is open in the detail view
 - **THEN** the **Complete** button is disabled
 
-### Requirement: Completion time
+#### Scenario: Item with description
+
+- **WHEN** an item with the status New and a description is open in the detail view
+- **THEN** the **Complete** button is enabled
+
+### Requirement: Record the completion time
 
 WHEN the app completes an item, the app SHALL record the completion time.
 
-#### Scenario: Complete an item with the status WIP
+#### Scenario: Complete an item with the status New
 
-- **WHEN** the user completes an item with the status WIP
+- **WHEN** the user completes an item with the status New
 - **THEN** the item has the status Complete, with the current time as the completion time
 
 ### Requirement: Reopen an item
 
-WHEN the user clicks **Reopen** for an item with the status Complete, the app SHALL change the status of the item to WIP.
+WHEN the user clicks **Reopen** for an item with the status Complete, the app SHALL change the status of the item to New.
 
 #### Scenario: Reopen
 
 - **WHEN** the user clicks **Reopen** for an item with the status Complete
-- **THEN** the item has the status WIP
+- **THEN** the item has the status New and is first in the New section
 
 ### Requirement: Completion time on reopen
 
@@ -124,7 +136,7 @@ WHEN the user reopens an item, the app SHALL remove the completion time of the i
 
 ### Requirement: Discard an item
 
-The app SHALL change the status of an item from New, WIP, or Complete to Discarded.
+The app SHALL change the status of an item from New or Complete to Discarded.
 
 #### Scenario: Discard an item with the status Complete
 
@@ -149,23 +161,28 @@ WHEN the app discards an item with the status Complete, the app SHALL remove the
 - **WHEN** the user discards the item "Docker" with the completion time `2026-09-16T14:32:07Z`
 - **THEN** the item "Docker" has the status Discarded, a discard time, and no completion time
 
-### Requirement: Description of a discarded item
+### Requirement: Discard keeps the description
 
 WHEN the app discards an item, the item SHALL keep the description.
 
-#### Scenario: Discard an item with the status WIP
+#### Scenario: Discard an item with the status New
 
-- **WHEN** the user clicks **Discard** for an item with the status WIP
-- **THEN** the item has the status Discarded and keeps the description
+- **WHEN** the user clicks **Discard** for an item with the status New and the description "Notes"
+- **THEN** the item has the status Discarded and keeps the description "Notes"
 
 ### Requirement: Restore an item
 
-WHEN the user restores an item with the status Discarded, the app SHALL change the status of the item to WIP WHEN the item has a description, or to New WHEN the item has no description.
+WHEN the user restores an item with the status Discarded, the app SHALL change the status of the item to New.
 
 #### Scenario: Restore without description
 
 - **WHEN** the user restores a discarded item without a description
 - **THEN** the item has the status New
+
+#### Scenario: Restore with description
+
+- **WHEN** the user restores a discarded item with the description "Notes"
+- **THEN** the item has the status New, keeps the description "Notes", and is first in the New section
 
 ### Requirement: Discard time on restore
 
@@ -193,7 +210,7 @@ IF the item has a status other than Discarded, THEN the confirmation dialog for 
 
 #### Scenario: Discard instead
 
-- **WHEN** the user clicks **Delete** for an item with the status WIP and then **Discard instead**
+- **WHEN** the user clicks **Delete** for an item with the status New and then **Discard instead**
 - **THEN** the item has the status Discarded
 
 ### Requirement: Unsaved text of a deleted item
@@ -220,8 +237,8 @@ WHEN the user clicks the title of a section, the app SHALL collapse or expand th
 
 #### Scenario: Collapse and expand
 
-- **WHEN** the user clicks the title of the expanded WIP section twice
-- **THEN** the WIP section is expanded again
+- **WHEN** the user clicks the title of the expanded New section twice
+- **THEN** the New section is expanded again
 
 ### Requirement: Collapsed section content
 
@@ -229,8 +246,8 @@ A collapsed section SHALL show only the title and the section count.
 
 #### Scenario: Collapse while a filter is active
 
-- **WHEN** a search matches 2 of the 5 items in the WIP section and the user collapses the WIP section
-- **THEN** the collapsed WIP section shows the section count "2 of 5"
+- **WHEN** a search matches 2 of the 5 items in the New section and the user collapses the New section
+- **THEN** the collapsed New section shows the section count "2 of 5"
 
 ### Requirement: Collapse not stored
 
@@ -275,14 +292,25 @@ WHEN the user presses Enter or Esc in the text field of the card, or leaves the 
 
 ### Requirement: Complete on the card
 
-The card of an item with the status WIP SHALL show a **Complete** button that completes the item.
+The card of an item with the status New and a description SHALL show a **Complete** button that completes the item.
 
 **Rationale**: The user completes an item without opening the detail view.
 
 #### Scenario: Complete on the card
 
-- **WHEN** the user clicks the **Complete** button on the card of the WIP item "Docker"
+- **WHEN** the user clicks the **Complete** button on the card of the New item "Docker" with a description
 - **THEN** "Docker" has the status Complete and is first in the Complete section
+
+### Requirement: No Complete button on a card without a description
+
+The card of an item without a description SHALL NOT show a **Complete** button.
+
+**Rationale**: The app completes an item only WHEN the item has a description.
+
+#### Scenario: Card without a description
+
+- **WHEN** the item "Docker" has the status New and no description
+- **THEN** the card of "Docker" shows no **Complete** button
 
 ### Requirement: Save edits in the detail view
 
@@ -320,13 +348,13 @@ WHILE the user edits a field in the detail view, IF a merge with GitHub changes 
 - **WHEN** the user has typed into the description and a merge changes the same description
 - **THEN** the detail view keeps the typed text and shows **Use theirs** and **Keep mine**
 
-### Requirement: Description editor
+### Requirement: Description editor of an item that is not Complete
 
-WHEN the detail view opens an item with the status New, WIP, or Discarded, the detail view SHALL show a text field for the description and a live preview of the rendered description.
+WHEN the detail view opens an item with the status New or Discarded, the detail view SHALL show a text field for the description and a live preview of the rendered description.
 
-#### Scenario: Open a WIP item
+#### Scenario: Open a New item
 
-- **WHEN** the user opens an item with the status WIP
+- **WHEN** the user opens an item with the status New
 - **THEN** the detail view shows the text field and the live preview of the description
 
 ### Requirement: Read-only description of a Complete item

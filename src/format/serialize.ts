@@ -7,12 +7,11 @@ const MIN_FENCE_LENGTH = 3;
 
 const SECTION_TITLES: Record<Status, string> = {
   new: 'New',
-  wip: 'WIP',
   complete: 'Complete',
   discarded: 'Discarded',
 };
 
-const SECTION_ORDER: readonly Status[] = ['new', 'wip', 'complete', 'discarded'];
+const SECTION_ORDER: readonly Status[] = ['new', 'complete', 'discarded'];
 
 export function serialize(board: Board): string {
   const lines: string[] = [versionLine(CURRENT_VERSION), '', HEADER_TITLE, ''];
@@ -59,10 +58,10 @@ export function fenceLength(description: string): number {
 
 function metaLine(item: Item): string {
   const parts = [`id:${item.id}`, `created:${item.createdAt}`];
-  if (item.statusTemp === 'complete') {
+  if (item.status === 'complete') {
     parts.push(`completed:${item.completedAt}`);
   }
-  if (item.statusTemp === 'discarded') {
+  if (item.status === 'discarded') {
     parts.push(`discarded:${item.discardedAt}`);
   }
   return `<!-- ${parts.join(' ')} -->`;

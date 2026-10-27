@@ -8,7 +8,7 @@ import { serialize } from '../../src/format/serialize';
 const fixturesDir = fileURLToPath(new URL('./fixtures/', import.meta.url));
 
 // Parts of a small hand-written file. `HEADER` ends with the line `## New` (line 5).
-const HEADER = '<!-- version:5 -->\n\n# Learning\n\n## New';
+const HEADER = '<!-- version:6 -->\n\n# Learning\n\n## New';
 const ID = '01M3VXEYY3V9M2BMAMMK12GMBS';
 const META = `<!-- id:${ID} created:2026-10-01T14:21:29Z -->`;
 const REST = '## Complete\n\n## Discarded\n';
@@ -24,11 +24,11 @@ describe('parse — version line', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.line).toBe(1);
-    expect(result.error.reason).toContain('Expected "<!-- version:5 -->"');
+    expect(result.error.reason).toContain('Expected "<!-- version:6 -->"');
   });
 
   it('accepts several blank lines between the version line and the title', () => {
-    const text = fixture('empty.md').replace('<!-- version:5 -->\n\n', '<!-- version:5 -->\n\n\n\n');
+    const text = fixture('empty.md').replace('<!-- version:6 -->\n\n', '<!-- version:6 -->\n\n\n\n');
     expect(parse(text).ok).toBe(true);
   });
 });
@@ -38,22 +38,21 @@ describe('parse — valid files', () => {
     const result = parse(fixture('valid.md'));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.new).toHaveLength(2);
-    expect(result.value.wip).toHaveLength(1);
+    expect(result.value.new).toHaveLength(3);
     expect(result.value.complete).toHaveLength(1);
     expect(result.value.discarded).toHaveLength(1);
   });
 
   it('parses a file with no items in any section', () => {
     const result = parse(fixture('empty.md'));
-    expect(result).toEqual({ ok: true, value: { tags: [], new: [], wip: [], complete: [], discarded: [] } });
+    expect(result).toEqual({ ok: true, value: { tags: [], new: [], complete: [], discarded: [] } });
   });
 
   it('treats headings, fences, comments, blank lines and unicode inside a description as raw content', () => {
     const result = parse(fixture('evil-descriptions.md'));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const [item] = result.value.wip;
+    const [item] = result.value.new;
     expect(item?.description).toContain('# Not a header');
     expect(item?.description).toContain('<!-- id:99999999999999999999999999 created:1999-01-01 -->');
     expect(item?.description).toContain('<!-- /desc -->\n````\nfour backticks');
@@ -65,7 +64,7 @@ describe('parse — valid files', () => {
     const result = parse(crlf);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.wip[0]?.description).not.toContain('\r');
+    expect(result.value.new[2]?.description).not.toContain('\r');
   });
 
   it('keeps full timestamps as written', () => {
@@ -96,15 +95,22 @@ describe('parse — valid files', () => {
     ]);
   });
 
+  it('reads a New item with a description and a New item without one', () => {
+    const result = parse(fixture('description-under-new.md'));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.new).toMatchObject([{ headline: 'Has text', status: 'new', description: 'text' }]);
+  });
+
   it('reads a `- NAME` line inside a description as text', () => {
     const text = fixture('tags.md').replace(
-      '## WIP\n',
-      '## WIP\n\n### Text\n<!-- id:01M2KCX2QCRJYQJSQW6XNKE3P9 created:2026-09-15T00:00:00Z -->\n```markdown\n- vue\n- nothing\n```\n',
+      '## Complete\n',
+      '### Text\n<!-- id:01M2KCX2QCRJYQJSQW6XNKE3P9 created:2026-09-15T00:00:00Z -->\n```markdown\n- vue\n- nothing\n```\n\n## Complete\n',
     );
     const result = parse(text);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.wip[0]).toMatchObject({ tags: [], description: '- vue\n- nothing' });
+    expect(result.value.new[3]).toMatchObject({ tags: [], description: '- vue\n- nothing' });
   });
 });
 
@@ -112,18 +118,18 @@ describe('parse — invalid files', () => {
   // Each fixture must fail for its own reason. Checking the reason (not only `ok === false`)
   // makes sure a fixture that was changed by accident, for example by a formatter, fails the test.
   const invalidFixtures: readonly (readonly [name: string, line: number, reason: string])[] = [
-    ['missing-section.md', 11, 'Expected section heading "## Discarded", found end of file'],
-    ['wrong-section-order.md', 5, 'Expected section heading "## New", found "## WIP"'],
-    ['unknown-line.md', 7, 'Expected section heading "## WIP", found "this line is not an item'],
+    ['missing-section.md', 9, 'Expected section heading "## Discarded", found end of file'],
+    ['wrong-section-order.md', 5, 'Expected section heading "## New", found "## Complete"'],
+    ['unknown-line.md', 7, 'Expected section heading "## Complete", found "this line is not an item'],
     ['duplicate-id.md', 12, 'Duplicate id "01M2KCX2QA8VMTXY950V44DB2J"'],
-    ['unterminated-fence.md', 11, 'Unterminated description (missing the closing fence "```")'],
-    ['wrong-fence-language.md', 11, 'Expected a description fence "```markdown", found "```md"'],
-    ['bad-closing-fence.md', 13, 'The closing fence must be exactly 3 backticks, found "````"'],
-    ['desc-marker-in-v3.md', 9, 'Expected section heading "## WIP", found "<!-- desc -->"'],
-    ['complete-without-desc.md', 12, 'A Complete item must have a description'],
-    ['complete-without-completed-tag.md', 12, 'Malformed metadata for an item under Complete'],
+    ['unterminated-fence.md', 9, 'Unterminated description (missing the closing fence "```")'],
+    ['wrong-fence-language.md', 9, 'Expected a description fence "```markdown", found "```md"'],
+    ['bad-closing-fence.md', 11, 'The closing fence must be exactly 3 backticks, found "````"'],
+    ['desc-marker-in-v3.md', 9, 'Expected section heading "## Complete", found "<!-- desc -->"'],
+    ['complete-without-desc.md', 10, 'A Complete item must have a description'],
+    ['complete-without-completed-tag.md', 10, 'Malformed metadata for an item under Complete'],
     ['malformed-meta.md', 8, 'Malformed metadata for an item under New'],
-    ['both-completed-and-discarded.md', 12, 'Malformed metadata for an item under Complete'],
+    ['both-completed-and-discarded.md', 10, 'Malformed metadata for an item under Complete'],
     ['bad-header.md', 3, 'Expected "# Learning", found "# My Learning Log"'],
     ['unknown-tag-on-item.md', 11, 'Unknown tag "rust" on this item'],
     ['duplicate-tag-definition.md', 6, 'Duplicate tag "Vue"'],
@@ -140,30 +146,28 @@ describe('parse — invalid files', () => {
     ['reserved-tag-definition.md', 5, 'Invalid tag name: "Uncategorized" is a reserved name'],
     ['reserved-tag-line.md', 9, 'Invalid tag: "Uncategorized" is a reserved name'],
     ['duplicate-tag-on-item.md', 12, 'Duplicate tag "vue" on this item'],
-    ['completed-under-wip.md', 10, 'Malformed metadata for an item under WIP'],
-    ['discarded-under-complete.md', 12, 'Malformed metadata for an item under Complete'],
-    ['description-under-new.md', 8, 'An item with a description must be under WIP, not New'],
-    ['no-description-under-wip.md', 10, 'An item without a description must be under New, not WIP'],
-    ['empty-fence.md', 11, 'Empty description'],
+    ['completed-under-new.md', 8, 'Malformed metadata for an item under New'],
+    ['discarded-under-complete.md', 10, 'Malformed metadata for an item under Complete'],
+    ['empty-fence.md', 9, 'Empty description'],
     ['plain-date.md', 8, 'Malformed metadata for an item under New'],
     ['uppercase-color.md', 5, 'Invalid tag color: "#AACBEE"'],
     ['tags-in-metadata.md', 10, 'Malformed metadata for an item under New'],
     ['tag-wrong-case.md', 11, 'Unknown tag "Vue" on this item'],
-    ['tag-star-marker.md', 12, 'Expected section heading "## WIP", found "* vue"'],
-    ['tag-plus-marker.md', 12, 'Expected section heading "## WIP", found "+ vue"'],
-    ['tag-no-space.md', 12, 'Expected section heading "## WIP", found "-vue"'],
-    ['tag-two-spaces.md', 12, 'Expected section heading "## WIP", found "-  vue"'],
-    ['tag-trailing-space.md', 12, 'Expected section heading "## WIP", found "- vue "'],
-    ['tag-empty.md', 12, 'Expected section heading "## WIP", found "- "'],
+    ['tag-star-marker.md', 12, 'Expected section heading "## Complete", found "* vue"'],
+    ['tag-plus-marker.md', 12, 'Expected section heading "## Complete", found "+ vue"'],
+    ['tag-no-space.md', 12, 'Expected section heading "## Complete", found "-vue"'],
+    ['tag-two-spaces.md', 12, 'Expected section heading "## Complete", found "-  vue"'],
+    ['tag-trailing-space.md', 12, 'Expected section heading "## Complete", found "- vue "'],
+    ['tag-empty.md', 12, 'Expected section heading "## Complete", found "- "'],
     ['tag-with-comma.md', 12, 'Invalid tag: "vue,rust" is not a valid tag name'],
-    ['blank-before-tags.md', 12, 'Expected section heading "## WIP", found "- vue"'],
-    ['blank-inside-tags.md', 14, 'Expected section heading "## WIP", found "- rust"'],
-    ['blank-before-fence.md', 13, 'Expected section heading "## WIP", found "```markdown"'],
-    ['tag-after-fence.md', 16, 'Expected section heading "## Complete", found "- vue"'],
+    ['blank-before-tags.md', 12, 'Expected section heading "## Complete", found "- vue"'],
+    ['blank-inside-tags.md', 14, 'Expected section heading "## Complete", found "- rust"'],
+    ['blank-before-fence.md', 13, 'Expected section heading "## Complete", found "```markdown"'],
+    ['tag-after-fence.md', 14, 'Expected section heading "## Complete", found "- vue"'],
     [
       'tag-definition-after-new.md',
       7,
-      'Expected section heading "## WIP", found "<!-- tag:vue color:#aacbee -->"',
+      'Expected section heading "## Complete", found "<!-- tag:vue color:#aacbee -->"',
     ],
   ];
 
@@ -186,23 +190,11 @@ describe('parse — fences', () => {
     const result = parse(text);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.wip[0]?.description).toContain('## Notes');
+    expect(result.value.new[2]?.description).toContain('## Notes');
   });
 
   it('saves a long hand-written fence around text without backticks as a fence of 3 backticks', () => {
-    const text = [
-      HEADER,
-      '',
-      '## WIP',
-      '',
-      '### Docker',
-      META,
-      '``````markdown',
-      'Notes',
-      '``````',
-      '',
-      REST,
-    ].join('\n');
+    const text = [HEADER, '', '### Docker', META, '``````markdown', 'Notes', '``````', '', REST].join('\n');
     const result = parse(text);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -212,8 +204,6 @@ describe('parse — fences', () => {
   it('closes a fence of 3 backticks at an inner fence of 3 backticks, and reports the line after it', () => {
     const text = [
       HEADER,
-      '',
-      '## WIP',
       '',
       '### Docker',
       META,
@@ -229,51 +219,47 @@ describe('parse — fences', () => {
     ].join('\n');
     expect(parse(text)).toMatchObject({
       ok: false,
-      error: { line: 16, reason: 'Expected section heading "## Complete", found "more text"' },
+      error: { line: 14, reason: 'Expected section heading "## Complete", found "more text"' },
     });
   });
 
   it('rejects a closing fence with trailing spaces', () => {
     const result = parse(fixture('bad-closing-fence.md').replace('````\n', '``` \n'));
-    expect(result).toMatchObject({ ok: false, error: { line: 13 } });
+    expect(result).toMatchObject({ ok: false, error: { line: 11 } });
   });
 
   it('accepts blank lines at the edges of a description, and the next save removes them', () => {
-    const text = [
-      HEADER,
-      '',
-      '## WIP',
-      '',
-      '### Docker',
-      META,
-      '```markdown',
-      '',
-      '  ',
-      'Notes',
-      '',
-      '```',
-      '',
-      REST,
-    ].join('\n');
+    const text = [HEADER, '', '### Docker', META, '```markdown', '', '  ', 'Notes', '', '```', '', REST].join(
+      '\n',
+    );
     const result = parse(text);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.wip[0]?.description).toBe('Notes');
+    expect(result.value.new[0]?.description).toBe('Notes');
     expect(serialize(result.value)).toContain(`${META}\n\`\`\`markdown\nNotes\n\`\`\`\n`);
   });
 });
 
 describe('parse — accepted and rejected variants', () => {
+  // Scenario "WIP section in a version 6 file" of the requirement "Three sections".
+  it('rejects a WIP section in a version 6 file', () => {
+    const result = parse([HEADER, '', '## WIP', '', REST].join('\n'));
+    expect(result).toMatchObject({
+      ok: false,
+      error: { line: 7, reason: 'Expected section heading "## Complete", found "## WIP"' },
+    });
+  });
+
   it('rejects an item id with a lower-case letter', () => {
     const meta = META.replace(ID, ID.toLowerCase());
-    const result = parse([HEADER, '', '### Docker', meta, '', '## WIP', '', REST].join('\n'));
+    const result = parse([HEADER, '', '### Docker', meta, '', REST].join('\n'));
     expect(result).toMatchObject({ ok: false, error: { line: 8 } });
     if (result.ok) return;
     expect(result.error.reason).toContain('upper-case ULID');
   });
 
   it('rejects a headline that contains a comment', () => {
-    const result = parse([HEADER, '', '### Docker <!-- note -->', META, '', '## WIP', '', REST].join('\n'));
+    const result = parse([HEADER, '', '### Docker <!-- note -->', META, '', REST].join('\n'));
     expect(result).toMatchObject({
       ok: false,
       error: { line: 7, reason: 'Invalid headline: the headline contains "<!--"' },
@@ -281,7 +267,7 @@ describe('parse — accepted and rejected variants', () => {
   });
 
   it('accepts spaces around a headline, and the next save removes them', () => {
-    const result = parse([HEADER, '', '###  Docker  ', META, '', '## WIP', '', REST].join('\n'));
+    const result = parse([HEADER, '', '###  Docker  ', META, '', REST].join('\n'));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.new[0]?.headline).toBe('Docker');
@@ -301,7 +287,7 @@ describe('parse — error messages (E8)', () => {
 
   it('rejects a date that does not exist', () => {
     const meta = META.replace('2026-10-01T14:21:29Z', '2026-02-30T00:00:00Z');
-    const result = parse([HEADER, '', '### Docker', meta, '', '## WIP', '', REST].join('\n'));
+    const result = parse([HEADER, '', '### Docker', meta, '', REST].join('\n'));
     expect(result).toMatchObject({ ok: false, error: { line: 8 } });
     if (result.ok) return;
     expect(result.error.reason).toContain('"2026-02-30T00:00:00Z" is not a valid timestamp');

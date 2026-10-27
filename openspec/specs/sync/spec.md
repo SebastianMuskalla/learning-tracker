@@ -349,8 +349,8 @@ IF GitHub rejected a save, THEN the app SHALL keep the position of the user for 
 
 #### Scenario: Restore and a change to another item
 
-- **WHEN** the user restored the discarded item "Docker" with a description, another device changed the headline of a WIP item, and GitHub rejects the save
-- **THEN** "Docker" is first in the WIP section
+- **WHEN** the user restored the discarded item "Docker" with a description, another device changed the headline of a New item, and GitHub rejects the save
+- **THEN** "Docker" is first in the New section
 
 ### Requirement: Position of an item from GitHub in a reordered section
 

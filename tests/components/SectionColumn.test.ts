@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest';
 import SectionColumn from '../../src/components/SectionColumn.vue';
 import { generateItemId, makeHeadline, makeIsoTimestamp } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
-import type { ActiveItem } from '../../src/domain/types';
+import type { NewItem } from '../../src/domain/types';
 
-function item(headline: string): ActiveItem {
+function item(headline: string): NewItem {
   return {
     id: generateItemId(),
     headline: unwrap(makeHeadline(headline)),
     createdAt: unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z')),
-    statusTemp: 'active',
+    status: 'new',
     description: null,
     tags: [],
   };

@@ -1,11 +1,9 @@
-<!-- version:5 -->
+<!-- version:6 -->
 
 # Learning
 
-## WIP
+## Complete
 
 ## New
-
-## Complete
 
 ## Discarded

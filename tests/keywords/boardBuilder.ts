@@ -4,16 +4,21 @@ import { generateItemId, makeDescription, makeHeadline } from '../../src/domain/
 import { unwrap } from '../../src/domain/result';
 import type { Board, ItemId, Status } from '../../src/domain/types';
 
-/** Builds a board for the keyword-link tests. Each item gets the description "About <headline>." */
+/** Builds a board for the keyword-link tests. Each item gets the description "About <headline>.",
+ *  unless the caller passes `null` for an item with the status New. */
 export class BoardBuilder {
   board: Board = emptyBoard();
   readonly ids = new Map<string, ItemId>();
 
-  add(headline: string, status: Status = 'complete', description = `About ${headline}.`): this {
+  add(
+    headline: string,
+    status: Status = 'complete',
+    description: string | null = `About ${headline}.`,
+  ): this {
     const id = generateItemId();
     this.ids.set(headline, id);
     this.run({ type: 'add', id, headline: unwrap(makeHeadline(headline)) });
-    if (status === 'new') return this;
+    if (description === null) return this;
     this.run({ type: 'setDescription', id, description: unwrap(makeDescription(description)) });
     if (status === 'complete') this.run({ type: 'complete', id });
     if (status === 'discarded') this.run({ type: 'discard', id });

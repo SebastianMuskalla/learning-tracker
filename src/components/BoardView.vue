@@ -95,7 +95,6 @@ function filterSection<T extends { headline: string; description: string | null;
 const visibleBoard = computed<Board>(() => ({
   tags: boardStore.board.tags,
   new: filterSection(boardStore.board.new),
-  wip: filterSection(boardStore.board.wip),
   complete: filterSection(boardStore.board.complete),
   discarded: filterSection(boardStore.board.discarded),
 }));
@@ -243,18 +242,6 @@ function onToggleTag(id: ItemId, tag: TagName): void {
         :filter-active="anyFilterActive"
         :tags="boardStore.board.tags"
         @reorder="(f: number, t: number) => onReorder('new', f, t)"
-        @select="onSelect"
-        @edit-headline="onEditHeadline"
-      />
-      <SectionColumn
-        title="WIP"
-        section="wip"
-        :items="visibleBoard.wip"
-        :total-count="boardStore.board.wip.length"
-        :drag-disabled="anyFilterActive"
-        :filter-active="anyFilterActive"
-        :tags="boardStore.board.tags"
-        @reorder="(f: number, t: number) => onReorder('wip', f, t)"
         @select="onSelect"
         @complete="onComplete"
         @edit-headline="onEditHeadline"

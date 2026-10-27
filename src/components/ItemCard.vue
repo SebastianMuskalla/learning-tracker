@@ -174,7 +174,11 @@ function commitEdit(): void {
     </div>
 
     <div class="actions" @click.stop>
-      <button v-if="section === 'wip'" title="Complete" @click="emit('complete')">
+      <button
+        v-if="section === 'new' && item.description !== null"
+        title="Complete"
+        @click="emit('complete')"
+      >
         <i class="fa-solid fa-check" aria-hidden="true"></i>
       </button>
     </div>

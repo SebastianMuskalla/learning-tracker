@@ -1,15 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { makeHeadline, makeOptionalDescription } from '../domain/factories';
-import {
-  allItems,
-  statusOf,
-  type Item,
-  type ItemId,
-  type Status,
-  type Tag,
-  type TagName,
-} from '../domain/types';
+import { allItems, type Item, type ItemId, type Status, type Tag, type TagName } from '../domain/types';
 import { formatTimestamp } from '../format/displayTimestamp';
 import { buildKeywordIndex, keywordInfos, linkKeywordsFor } from '../keywords/index';
 import { closestKeywordLink, linkKeywords } from '../keywords/linkDom';
@@ -41,12 +33,11 @@ const emit = defineEmits<{
 
 const STATUS_LABEL: Record<Status, string> = {
   new: 'New',
-  wip: 'WIP',
   complete: 'Complete',
   discarded: 'Discarded',
 };
 
-const statusLabel = computed(() => STATUS_LABEL[statusOf(item)]);
+const statusLabel = computed(() => STATUS_LABEL[item.status]);
 const searchStore = useSearchStore();
 const boardStore = useBoardStore();
 
@@ -60,7 +51,7 @@ const descriptionChangedElsewhere = ref(false);
 const livePreviewEl = ref<HTMLElement | null>(null);
 const staticPreviewEl = ref<HTMLElement | null>(null);
 const showDeleteConfirm = ref(false);
-const descriptionEditing = ref(item.statusTemp !== 'complete');
+const descriptionEditing = ref(item.status !== 'complete');
 /** True once the detail view is being removed. Its drafts are saved then, and never again. */
 let unmounting = false;
 
@@ -155,7 +146,7 @@ watch(
       headlineChangedElsewhere.value = false;
       descriptionChangedElsewhere.value = false;
       showDeleteConfirm.value = false;
-      descriptionEditing.value = item.statusTemp !== 'complete';
+      descriptionEditing.value = item.status !== 'complete';
       return;
     }
 
@@ -219,7 +210,7 @@ function saveHeadline(): void {
 
 function saveDescription(): void {
   if (unmounting) return;
-  if (item.statusTemp === 'complete' && descriptionDraft.value.trim() === '') {
+  if (item.status === 'complete' && descriptionDraft.value.trim() === '') {
     descError.value = 'A completed item must keep a description.';
     return;
   }
@@ -353,7 +344,7 @@ function onKeydown(event: KeyboardEvent): void {
 <template>
   <aside class="detail-view" @keydown="onKeydown" @scroll.capture="hideTooltip">
     <div class="detail-view-header">
-      <span class="status-badge" :class="statusOf(item)">{{ statusLabel }}</span>
+      <span class="status-badge" :class="item.status">{{ statusLabel }}</span>
       <input v-model="headlineDraft" class="headline" @blur="saveHeadline" @keyup.enter="saveHeadline" />
       <button class="close" title="Close (Esc)" aria-label="Close" @click="close">
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -379,7 +370,7 @@ function onKeydown(event: KeyboardEvent): void {
             Also used by {{ quoteList(info.alsoUsedBy) }} — not linked.
           </span>
         </span>
-        <span v-if="item.statusTemp !== 'complete'" class="keywords-note">
+        <span v-if="item.status !== 'complete'" class="keywords-note">
           Other items link here only when this item is complete.
         </span>
       </template>
@@ -396,11 +387,11 @@ function onKeydown(event: KeyboardEvent): void {
     <dl class="dates">
       <dt>Created</dt>
       <dd>{{ formatTimestamp(item.createdAt) }}</dd>
-      <template v-if="item.statusTemp === 'complete'">
+      <template v-if="item.status === 'complete'">
         <dt>Completed</dt>
         <dd>{{ formatTimestamp(item.completedAt) }}</dd>
       </template>
-      <template v-if="item.statusTemp === 'discarded'">
+      <template v-if="item.status === 'discarded'">
         <dt>Discarded</dt>
         <dd>{{ formatTimestamp(item.discardedAt) }}</dd>
       </template>
@@ -478,19 +469,19 @@ function onKeydown(event: KeyboardEvent): void {
     <h3>Actions</h3>
     <div class="actions">
       <button
-        v-if="item.statusTemp === 'active'"
+        v-if="item.status === 'new'"
         :disabled="item.description === null"
         @click="emit('complete', item.id)"
       >
         <i class="fa-solid fa-check" aria-hidden="true"></i> Complete
       </button>
-      <button v-if="item.statusTemp === 'complete'" @click="emit('uncomplete', item.id)">
+      <button v-if="item.status === 'complete'" @click="emit('uncomplete', item.id)">
         <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reopen
       </button>
-      <button v-if="item.statusTemp === 'discarded'" @click="emit('restore', item.id)">
+      <button v-if="item.status === 'discarded'" @click="emit('restore', item.id)">
         <i class="fa-solid fa-trash-arrow-up" aria-hidden="true"></i> Restore
       </button>
-      <button v-if="item.statusTemp !== 'discarded'" class="danger" @click="emit('discard', item.id)">
+      <button v-if="item.status !== 'discarded'" class="danger" @click="emit('discard', item.id)">
         <i class="fa-solid fa-ban" aria-hidden="true"></i> Discard
       </button>
       <button class="danger" @click="showDeleteConfirm = true">
@@ -505,7 +496,7 @@ function onKeydown(event: KeyboardEvent): void {
         <button class="ghost" autofocus @click="showDeleteConfirm = false">
           <i class="fa-solid fa-xmark" aria-hidden="true"></i> Cancel
         </button>
-        <button v-if="item.statusTemp !== 'discarded'" class="ghost" @click="discardInstead">
+        <button v-if="item.status !== 'discarded'" class="ghost" @click="discardInstead">
           <i class="fa-solid fa-ban" aria-hidden="true"></i> Discard instead
         </button>
         <button class="danger" @click="confirmDelete">
@@ -551,9 +542,6 @@ function onKeydown(event: KeyboardEvent): void {
 
 .status-badge.new {
   color: var(--new);
-}
-.status-badge.wip {
-  color: var(--wip);
 }
 .status-badge.complete {
   color: var(--complete);

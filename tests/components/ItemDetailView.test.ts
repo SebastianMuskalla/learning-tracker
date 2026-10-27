@@ -14,17 +14,17 @@ import {
   makeTagName,
 } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
-import { findItemById, type ActiveItem } from '../../src/domain/types';
+import { findItemById, type NewItem } from '../../src/domain/types';
 import { formatTimestamp } from '../../src/format/displayTimestamp';
 import { useBoardStore } from '../../src/store/board';
 import { BoardBuilder } from '../keywords/boardBuilder';
 
-function item(headline: string, description: string | null): ActiveItem {
+function item(headline: string, description: string | null): NewItem {
   return {
     id: generateItemId(),
     headline: unwrap(makeHeadline(headline)),
     createdAt: unwrap(makeIsoTimestamp('2026-09-01T00:00:00Z')),
-    statusTemp: 'active',
+    status: 'new',
     description: description === null ? null : unwrap(makeDescription(description)),
     tags: [],
   };
@@ -37,7 +37,7 @@ beforeEach(() => {
   setActivePinia(pinia);
 });
 
-function mountDetailView(initial: ActiveItem) {
+function mountDetailView(initial: NewItem) {
   return mount(ItemDetailView, {
     props: { item: initial, tags: [] },
     global: { plugins: [pinia] },
@@ -242,12 +242,12 @@ describe('ItemDetailView tag chips and times', () => {
 });
 
 describe('ItemDetailView keyword links', () => {
-  /** OWASP (Complete), XSS (WIP), and a WIP source that mentions both. */
+  /** OWASP (Complete), XSS (New), and a New source that mentions both. */
   function setup(sourceDescription = 'Read about OWASP and XSS.', extra?: (b: BoardBuilder) => void) {
     const builder = new BoardBuilder()
       .add('OWASP (Open Worldwide Application Security Project)', 'complete', 'The **OWASP** project.')
-      .add('XSS', 'wip')
-      .add('Source', 'wip', sourceDescription);
+      .add('XSS', 'new')
+      .add('Source', 'new', sourceDescription);
     extra?.(builder);
     useBoardStore(pinia).board = builder.board;
     const owaspId = builder.id('OWASP (Open Worldwide Application Security Project)');
@@ -269,7 +269,7 @@ describe('ItemDetailView keyword links', () => {
     document.body.innerHTML = '';
   });
 
-  it('links a keyword of a Complete item in the live preview, but not a WIP item', async () => {
+  it('links a keyword of a Complete item in the live preview, but not a New item', async () => {
     const { builder, owaspId } = setup();
     const wrapper = mountFor(builder, 'Source');
     await flushPromises();

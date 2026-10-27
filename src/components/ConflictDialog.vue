@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { MergeConflict } from '../domain/merge';
-import { findItemById, statusOf, type Board, type Item, type Status, type Tag } from '../domain/types';
+import { findItemById, type Board, type Item, type Status, type Tag } from '../domain/types';
 import ModalDialog from './ModalDialog.vue';
 
 const { local, remote, conflicts } = defineProps<{
@@ -18,7 +18,6 @@ defineEmits<{
 
 const STATUS_LABEL: Record<Status, string> = {
   new: 'New',
-  wip: 'WIP',
   complete: 'Complete',
   discarded: 'Discarded',
 };
@@ -103,7 +102,7 @@ function tagNames(item: Item): string {
               <p class="headline">{{ version.item.headline }}</p>
               <dl>
                 <dt>Status</dt>
-                <dd>{{ STATUS_LABEL[statusOf(version.item)] }}</dd>
+                <dd>{{ STATUS_LABEL[version.item.status] }}</dd>
                 <dt>Tags</dt>
                 <dd>{{ tagNames(version.item) }}</dd>
               </dl>

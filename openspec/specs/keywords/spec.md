@@ -27,15 +27,15 @@ The app SHALL take the keywords of each item from the headline of the item WHEN 
 - **WHEN** the app saves `learning.md` with the Complete item `OWASP`
 - **THEN** the file contains the headline `OWASP` and no separate keyword line
 
-### Requirement: Only Complete items create links
+### Requirement: Keyword links only from Complete items
 
 Only the keywords of items with the status Complete SHALL create keyword links.
 
 **Rationale**: An item explains a term only after the item is complete.
 
-#### Scenario: Item with the status WIP
+#### Scenario: Item with the status New
 
-- **WHEN** the headline of an item with the status WIP is `OWASP` and another description contains "OWASP"
+- **WHEN** the headline of an item with the status New is `OWASP` and another description contains "OWASP"
 - **THEN** the detail view shows no keyword link for "OWASP"
 
 ### Requirement: Remove parentheses
@@ -111,13 +111,13 @@ WHILE the user edits the headline, the detail view SHALL update the "Linked as:"
 - **WHEN** the user changes the headline from `CI` to `CI, CD`
 - **THEN** "Linked as:" shows `CI` and `CD`
 
-### Requirement: Note for an item that is not Complete
+### Requirement: Note in the list of an item that is not Complete
 
 WHILE the open item does not have the status Complete and the headline gives at least one keyword, the "Linked as:" list SHALL show "Other items link here only when this item is complete."
 
-#### Scenario: WIP item
+#### Scenario: New item
 
-- **WHEN** the user opens the WIP item `Source`
+- **WHEN** the user opens the New item `Source`
 - **THEN** "Linked as:" shows `Source` and the note "Other items link here only when this item is complete."
 
 ### Requirement: Headline without keywords
@@ -238,15 +238,15 @@ IF two items with the status Complete give the same keyword, THEN the app SHALL 
 - **WHEN** the Complete items `Risk assessment` and `risk-assessment` exist
 - **THEN** the app links neither keyword
 
-### Requirement: Warning for the same keyword
+### Requirement: Warning for a keyword of another item
 
 The "Linked as:" list of each item that gives the same keyword as another item with the status Complete SHALL show the warning "Also used by "…" — not linked.", also for an item that does not have the status Complete.
 
 **Rationale**: The user sees the conflict before completing the second item.
 
-#### Scenario: Warning on a WIP item
+#### Scenario: Warning on a New item
 
-- **WHEN** the Complete item `Risk assessment` and the WIP item `risk-assessment` exist
+- **WHEN** the Complete item `Risk assessment` and the New item `risk-assessment` exist
 - **THEN** the "Linked as:" list of `risk-assessment` shows "Also used by "Risk assessment" — not linked."
 
 ### Requirement: Where links appear

@@ -4,7 +4,6 @@ import type { MigrationStep } from './migrations/run';
 
 const SECTION_LABELS: Record<Status, string> = {
   new: 'New',
-  wip: 'WIP',
   complete: 'Complete',
   discarded: 'Discarded',
 };

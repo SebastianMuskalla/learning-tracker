@@ -2,8 +2,8 @@
 
 Learning Tracker is a single-page web app.
 You use the app to track items that you want to learn.
-Each item has exactly one of four statuses:
-**New**, **WIP** (work in progress), **Complete**, or **Discarded**.
+Each item has exactly one of three statuses:
+**New**, **Complete**, or **Discarded**.
 
 The app stores your items in one Markdown file, `learning.md`.
 This file is in a private GitHub repository.
@@ -133,7 +133,7 @@ The app now loads your items. You can change these settings later on the setting
 - **Board.**
   The board has one section for each status.
   You add an item with a headline.
-  An item with the status New moves to WIP when you add a description.
+  You complete an item only when the item has a description.
   You can complete, reopen, discard, restore, delete, and reorder items.
 - **Detail view.**
   Click a card to open the detail view.
@@ -178,7 +178,7 @@ The specs in `openspec/specs/` describe each feature in detail.
 | `learning.md`   | The Markdown file in the data repository that stores the items and the tag definitions.                          |
 | token           | A fine-grained personal access token of GitHub, with access to the data repository only.                         |
 | board           | The main screen of the app. It shows one section for each status.                                                |
-| status          | The stage of an item: New, WIP, Complete, or Discarded.                                                          |
+| status          | The stage of an item: New, Complete, or Discarded.                                                               |
 | section         | The part of the board that shows the items of one status. The board has one section for each status.             |
 | section count   | The number of items next to a section title, or "x of y" while a search or a tag filter is active.               |
 | item            | One thing to learn, with a headline, an optional description, and zero or more tags.                             |
@@ -212,7 +212,6 @@ The specs in `openspec/specs/` describe each feature in detail.
 | ULID            | Universally unique lexicographically sortable identifier: the 26-character id of an item.                        |
 | URL             | Uniform resource locator: a web address.                                                                         |
 | UTC             | Coordinated Universal Time: the time zone of each timestamp in `learning.md`.                                    |
-| WIP             | Work in progress: the status of an item that has a description and is neither Complete nor Discarded.            |
 
 The word "glossary" names only this section. The app feature that links terms is "keywords".
 
@@ -274,4 +273,3 @@ After each commit, the project works and `pnpm check` passes.
 ## Future Work
 
 - Artificial intelligence (AI) lookup and fact check
-- Merge WIP and New and fix `statusTemp`

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { migrateV3 } from '../../../src/format/migrations/v3-tags-and-cleanup';
 import { migrateV4 } from '../../../src/format/migrations/v4-reserved-uncategorized';
+import { migrateV5 } from '../../../src/format/migrations/v5-merge-new-and-wip';
 import { parse } from '../../../src/format/parse';
 import { serialize } from '../../../src/format/serialize';
 
@@ -102,8 +103,10 @@ describe('migration 3 → 4, frozen fixtures', () => {
 
   it.each(names)('%s gives exactly what the serializer writes', (name) => {
     const output = migrated(readFileSync(`${root}${name}`, 'utf-8'));
-    // The parser reads the current version only, so the output goes through the next migration first.
-    const next = migrateV4.migrate(output);
+    // The parser reads the current version only, so the output goes through the next migrations first.
+    const v5 = migrateV4.migrate(output);
+    if (!v5.ok) throw new Error(v5.error.reason);
+    const next = migrateV5.migrate(v5.value);
     expect(next.ok).toBe(true);
     if (!next.ok) return;
     const parsed = parse(next.value);

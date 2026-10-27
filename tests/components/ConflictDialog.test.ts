@@ -84,7 +84,7 @@ describe('ConflictDialog content', () => {
     expect(itemVersions.map((v) => v.get('h3').text())).toEqual(['Your version', "GitHub's version"]);
     expect(itemVersions.map((v) => v.get('.description').text())).toEqual(['Mine', 'Theirs']);
     expect(itemVersions.map((v) => v.get('.headline').text())).toEqual(['Docker', 'Docker']);
-    expect(itemVersions[0]?.text()).toContain('WIP');
+    expect(itemVersions[0]?.text()).toContain('New');
 
     const tagVersions = tagRow?.findAll('.version') ?? [];
     expect(tagVersions.map((v) => v.get('.tag-color').text())).toEqual(['#f6c9a4', '#d8b8e6']);

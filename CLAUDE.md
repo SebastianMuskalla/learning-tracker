@@ -38,7 +38,7 @@ Code comments follow Group 1 loosely.
 11. Do not use open-ended lists: "including but not limited to", "etc.", "and so on".
     "For example" is allowed, because it marks the list as a sample.
 12. Write Glossary terms in lower case.
-    Capitalize only proper nouns (for example GitHub), the status names New, WIP, Complete, and Discarded,
+    Capitalize only proper nouns (for example GitHub), the status names New, Complete, and Discarded,
     the name Uncategorized, and UI labels quoted as they appear.
 
 ### Group 2: requirement statements in specs

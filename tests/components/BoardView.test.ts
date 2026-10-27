@@ -199,7 +199,7 @@ describe('keyword links', () => {
   it('open an item that the search hides, and the search term stays', async () => {
     const builder = new BoardBuilder()
       .add('OWASP', 'complete', 'The project.')
-      .add('Source', 'wip', 'Read about OWASP.');
+      .add('Source', 'new', 'Read about OWASP.');
     const { wrapper } = await mountBoard(builder.board);
     const search = useSearchStore();
     search.term = 'Source';
@@ -253,11 +253,12 @@ describe('the "Item" field of the header bar', () => {
 });
 
 describe('the Complete button on a card', () => {
-  it('completes the WIP item and puts it first in the Complete section', async () => {
-    const builder = new BoardBuilder().add('Git', 'complete').add('Docker', 'wip');
+  // Scenario "Complete on the card" of the requirement "Complete on the card".
+  it('completes the New item with a description and puts it first in the Complete section', async () => {
+    const builder = new BoardBuilder().add('Git', 'complete').add('Docker', 'new');
     const { wrapper, board } = await mountBoard(builder.board);
 
-    await wrapper.get('.card.wip .actions button').trigger('click');
+    await wrapper.get('.card.new .actions button').trigger('click');
     await flushPromises();
 
     expect(board.board.complete.map((item) => item.headline)).toEqual(['Docker', 'Git']);
@@ -308,7 +309,7 @@ describe('search', () => {
   });
 
   it('tells the user about a match that is only in a link target', async () => {
-    const builder = new BoardBuilder().add('Docs', 'wip', 'See [the site](https://example.org).');
+    const builder = new BoardBuilder().add('Docs', 'new', 'See [the site](https://example.org).');
     const { wrapper } = await mountBoard(builder.board);
 
     await search(wrapper, 'example.org');
@@ -320,7 +321,7 @@ describe('search', () => {
   });
 
   it('moves the focus to the search bar on Ctrl+K while the user edits a description', async () => {
-    const builder = new BoardBuilder().add('Docker', 'wip');
+    const builder = new BoardBuilder().add('Docker', 'new');
     const { wrapper } = await mountBoard(builder.board);
     await wrapper.get('.card').trigger('click');
     const textarea = wrapper.get<HTMLTextAreaElement>('.detail-view textarea').element;
@@ -350,7 +351,7 @@ describe('a file that the app cannot read', () => {
   });
 
   it('shows a Reload button for a file with a newer format version', async () => {
-    const text = serialize(sampleBoard()).replace('version:5', 'version:6');
+    const text = serialize(sampleBoard()).replace('version:6', 'version:7');
     getFile.mockResolvedValue({ ok: true, value: { text, sha: 's1' } });
     const wrapper = mount(BoardView, { global: { plugins: [pinia] }, attachTo: document.body });
     await flushPromises();

@@ -1,4 +1,4 @@
-<!-- version:5 -->
+<!-- version:6 -->
 
 # Learning
 
@@ -9,8 +9,6 @@
 ```markdown
 text
 ```
-
-## WIP
 
 ## Complete
 

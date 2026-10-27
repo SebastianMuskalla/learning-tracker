@@ -9,20 +9,20 @@ import {
   makeTagName,
 } from '../../src/domain/factories';
 import { unwrap } from '../../src/domain/result';
-import type { ActiveItem, Board } from '../../src/domain/types';
+import type { NewItem, Board } from '../../src/domain/types';
 import { fenceLength, HEADER_TITLE, serialize } from '../../src/format/serialize';
 import { versionLine } from '../../src/format/version';
 
-const HEADER = `${versionLine(5)}\n\n${HEADER_TITLE}`;
+const HEADER = `${versionLine(6)}\n\n${HEADER_TITLE}`;
 
 describe('serialize', () => {
-  it('writes the header and all four section headings for an empty board', () => {
+  it('writes the header and all three section headings for an empty board', () => {
     const text = serialize(emptyBoard());
-    expect(text.startsWith(`${HEADER}\n\n## New\n\n## WIP\n\n## Complete\n\n## Discarded\n`)).toBe(true);
+    expect(text.startsWith(`${HEADER}\n\n## New\n\n## Complete\n\n## Discarded\n`)).toBe(true);
   });
 
   it('starts the file with the version line, then the title', () => {
-    expect(serialize(emptyBoard()).startsWith('<!-- version:5 -->\n\n# Learning\n\n')).toBe(true);
+    expect(serialize(emptyBoard()).startsWith('<!-- version:6 -->\n\n# Learning\n\n')).toBe(true);
   });
 
   it('ends the file with a single trailing newline', () => {
@@ -32,11 +32,11 @@ describe('serialize', () => {
   });
 
   it('writes an item without a description as headline + metadata only', () => {
-    const item: ActiveItem = {
+    const item: NewItem = {
       id: generateItemId(),
       headline: unwrap(makeHeadline('Kubernetes operators')),
       createdAt: unwrap(makeIsoTimestamp('2026-09-15T14:32:07Z')),
-      statusTemp: 'active',
+      status: 'new',
       description: null,
       tags: [],
     };
@@ -49,18 +49,18 @@ describe('serialize', () => {
 
   it('writes the tag list between the metadata line and the fence', () => {
     const vue = unwrap(makeTagName('vue'));
-    const item: ActiveItem = {
+    const item: NewItem = {
       id: generateItemId(),
       headline: unwrap(makeHeadline('Tagged')),
       createdAt: unwrap(makeIsoTimestamp('2026-09-15T14:32:07Z')),
-      statusTemp: 'active',
+      status: 'new',
       description: unwrap(makeDescription('text')),
       tags: [vue],
     };
     const board: Board = {
       ...emptyBoard(),
       tags: [{ name: vue, color: unwrap(makeHexColor('#aacbee')) }],
-      wip: [item],
+      new: [item],
     };
     expect(serialize(board)).toContain(
       `<!-- id:${item.id} created:2026-09-15T14:32:07Z -->\n- vue\n\`\`\`markdown\ntext\n\`\`\`\n`,
@@ -70,7 +70,7 @@ describe('serialize', () => {
   it('a board with no tags has no tag lines', () => {
     const text = serialize(emptyBoard());
     expect(text).not.toContain('tag:');
-    expect(text).toBe(`${HEADER}\n\n## New\n\n## WIP\n\n## Complete\n\n## Discarded\n`);
+    expect(text).toBe(`${HEADER}\n\n## New\n\n## Complete\n\n## Discarded\n`);
   });
 
   it('writes tag definition lines directly after the header, then one blank line, then New', () => {
@@ -91,19 +91,19 @@ describe('serialize', () => {
     const vue = unwrap(makeTagName('vue'));
     const rust = unwrap(makeTagName('rust'));
     const color = unwrap(makeHexColor('#aacbee'));
-    const tagged: ActiveItem = {
+    const tagged: NewItem = {
       id: generateItemId(),
       headline: unwrap(makeHeadline('Tagged')),
       createdAt: unwrap(makeIsoTimestamp('2026-09-15T14:32:07Z')),
-      statusTemp: 'active',
+      status: 'new',
       description: null,
       tags: [vue, rust],
     };
-    const untagged: ActiveItem = {
+    const untagged: NewItem = {
       id: generateItemId(),
       headline: unwrap(makeHeadline('Untagged')),
       createdAt: unwrap(makeIsoTimestamp('2026-09-15T14:32:07Z')),
-      statusTemp: 'active',
+      status: 'new',
       description: null,
       tags: [],
     };

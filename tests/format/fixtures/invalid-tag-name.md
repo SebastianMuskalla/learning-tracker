@@ -1,12 +1,10 @@
-<!-- version:5 -->
+<!-- version:6 -->
 
 # Learning
 
 <!-- tag:web dev color:#aacbee -->
 
 ## New
-
-## WIP
 
 ## Complete
 

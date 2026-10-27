@@ -1,14 +1,13 @@
 import { generateItemId, nowTimestamp } from './factories';
 import { err, ok, type Result } from './result';
 import type {
-  ActiveItem,
+  NewItem,
   Board,
   CompleteItem,
   Description,
   DiscardedItem,
   HexColor,
   Headline,
-  Item,
   IsoTimestamp,
   ItemId,
   Status,
@@ -46,7 +45,7 @@ export type DomainError =
   | { readonly type: 'DuplicateItemId'; readonly id: ItemId }
   | { readonly type: 'ItemNotFound'; readonly id: ItemId }
   | { readonly type: 'CompleteRequiresDescription'; readonly id: ItemId }
-  | { readonly type: 'WrongStatus'; readonly id: ItemId; readonly expected: Item['statusTemp'] }
+  | { readonly type: 'WrongStatus'; readonly id: ItemId; readonly expected: Status }
   | { readonly type: 'AlreadyDiscarded'; readonly id: ItemId }
   | { readonly type: 'InvalidReorderIndex'; readonly section: Status; readonly index: number }
   | { readonly type: 'TagAlreadyExists'; readonly name: TagName }
@@ -59,8 +58,7 @@ function sameTagName(a: TagName, b: TagName): boolean {
 }
 
 type Located =
-  | { readonly section: 'new'; readonly index: number; readonly item: ActiveItem }
-  | { readonly section: 'wip'; readonly index: number; readonly item: ActiveItem }
+  | { readonly section: 'new'; readonly index: number; readonly item: NewItem }
   | { readonly section: 'complete'; readonly index: number; readonly item: CompleteItem }
   | { readonly section: 'discarded'; readonly index: number; readonly item: DiscardedItem };
 
@@ -68,10 +66,6 @@ function locate(board: Board, id: ItemId): Located | undefined {
   const newIndex = board.new.findIndex((item) => item.id === id);
   const newItem = board.new.find((item) => item.id === id);
   if (newIndex !== -1 && newItem) return { section: 'new', index: newIndex, item: newItem };
-
-  const wipIndex = board.wip.findIndex((item) => item.id === id);
-  const wipItem = board.wip.find((item) => item.id === id);
-  if (wipIndex !== -1 && wipItem) return { section: 'wip', index: wipIndex, item: wipItem };
 
   const completeIndex = board.complete.findIndex((item) => item.id === id);
   const completeItem = board.complete.find((item) => item.id === id);
@@ -91,8 +85,6 @@ function removeAt(board: Board, located: Located): Board {
   switch (located.section) {
     case 'new':
       return { ...board, new: board.new.filter((_, i) => i !== located.index) };
-    case 'wip':
-      return { ...board, wip: board.wip.filter((_, i) => i !== located.index) };
     case 'complete':
       return { ...board, complete: board.complete.filter((_, i) => i !== located.index) };
     case 'discarded':
@@ -100,12 +92,8 @@ function removeAt(board: Board, located: Located): Board {
   }
 }
 
-function prependNew(board: Board, item: ActiveItem): Board {
+function prependNew(board: Board, item: NewItem): Board {
   return { ...board, new: [item, ...board.new] };
-}
-
-function prependWip(board: Board, item: ActiveItem): Board {
-  return { ...board, wip: [item, ...board.wip] };
 }
 
 function prependComplete(board: Board, item: CompleteItem): Board {
@@ -160,11 +148,11 @@ function applyAdd(
   now: IsoTimestamp,
 ): Result<Board, DomainError> {
   if (locate(board, id)) return err({ type: 'DuplicateItemId', id });
-  const item: ActiveItem = {
+  const item: NewItem = {
     id,
     headline,
     createdAt: now,
-    statusTemp: 'active',
+    status: 'new',
     description: null,
     tags: [],
   };
@@ -177,8 +165,6 @@ function applyEditHeadline(board: Board, id: ItemId, headline: Headline): Result
   switch (located.section) {
     case 'new':
       return ok({ ...board, new: replaceAt(board.new, located.index, { ...located.item, headline }) });
-    case 'wip':
-      return ok({ ...board, wip: replaceAt(board.wip, located.index, { ...located.item, headline }) });
     case 'complete':
       return ok({
         ...board,
@@ -216,26 +202,15 @@ function applySetDescription(
         discarded: replaceAt(board.discarded, located.index, { ...located.item, description }),
       });
     case 'new':
-    case 'wip': {
-      // Active: moves between New/WIP automatically when the section changes.
-      const updated: ActiveItem = { ...located.item, description };
-      const targetSection: Status = description === null ? 'new' : 'wip';
-      if (targetSection === located.section) {
-        return located.section === 'new'
-          ? ok({ ...board, new: replaceAt(board.new, located.index, updated) })
-          : ok({ ...board, wip: replaceAt(board.wip, located.index, updated) });
-      }
-      const withoutOld = removeAt(board, located);
-      return ok(targetSection === 'new' ? prependNew(withoutOld, updated) : prependWip(withoutOld, updated));
-    }
+      return ok({ ...board, new: replaceAt(board.new, located.index, { ...located.item, description }) });
   }
 }
 
 function applyComplete(board: Board, id: ItemId, now: IsoTimestamp): Result<Board, DomainError> {
   const located = locate(board, id);
   if (!located) return err({ type: 'ItemNotFound', id });
-  if (located.section !== 'new' && located.section !== 'wip') {
-    return err({ type: 'WrongStatus', id, expected: 'active' });
+  if (located.section !== 'new') {
+    return err({ type: 'WrongStatus', id, expected: 'new' });
   }
   if (located.item.description === null) {
     return err({ type: 'CompleteRequiresDescription', id });
@@ -244,7 +219,7 @@ function applyComplete(board: Board, id: ItemId, now: IsoTimestamp): Result<Boar
     id: located.item.id,
     headline: located.item.headline,
     createdAt: located.item.createdAt,
-    statusTemp: 'complete',
+    status: 'complete',
     description: located.item.description,
     completedAt: now,
     tags: located.item.tags,
@@ -258,15 +233,15 @@ function applyUncomplete(board: Board, id: ItemId): Result<Board, DomainError> {
   if (located.section !== 'complete') {
     return err({ type: 'WrongStatus', id, expected: 'complete' });
   }
-  const activeItem: ActiveItem = {
+  const newItem: NewItem = {
     id: located.item.id,
     headline: located.item.headline,
     createdAt: located.item.createdAt,
-    statusTemp: 'active',
+    status: 'new',
     description: located.item.description,
     tags: located.item.tags,
   };
-  return ok(prependWip(removeAt(board, located), activeItem));
+  return ok(prependNew(removeAt(board, located), newItem));
 }
 
 function applyDiscard(board: Board, id: ItemId, now: IsoTimestamp): Result<Board, DomainError> {
@@ -279,7 +254,7 @@ function applyDiscard(board: Board, id: ItemId, now: IsoTimestamp): Result<Board
     id: located.item.id,
     headline: located.item.headline,
     createdAt: located.item.createdAt,
-    statusTemp: 'discarded',
+    status: 'discarded',
     description: located.item.description,
     discardedAt: now,
     tags: located.item.tags,
@@ -293,20 +268,15 @@ function applyRestore(board: Board, id: ItemId): Result<Board, DomainError> {
   if (located.section !== 'discarded') {
     return err({ type: 'WrongStatus', id, expected: 'discarded' });
   }
-  const activeItem: ActiveItem = {
+  const newItem: NewItem = {
     id: located.item.id,
     headline: located.item.headline,
     createdAt: located.item.createdAt,
-    statusTemp: 'active',
+    status: 'new',
     description: located.item.description,
     tags: located.item.tags,
   };
-  const withoutOld = removeAt(board, located);
-  return ok(
-    located.item.description === null
-      ? prependNew(withoutOld, activeItem)
-      : prependWip(withoutOld, activeItem),
-  );
+  return ok(prependNew(removeAt(board, located), newItem));
 }
 
 function reorderList<T>(list: readonly T[], fromIndex: number, toIndex: number): T[] | undefined {
@@ -332,11 +302,6 @@ function applyReorder(
       const reordered = reorderList(board.new, fromIndex, toIndex);
       if (!reordered) return err({ type: 'InvalidReorderIndex', section, index: fromIndex });
       return ok({ ...board, new: reordered });
-    }
-    case 'wip': {
-      const reordered = reorderList(board.wip, fromIndex, toIndex);
-      if (!reordered) return err({ type: 'InvalidReorderIndex', section, index: fromIndex });
-      return ok({ ...board, wip: reordered });
     }
     case 'complete': {
       const reordered = reorderList(board.complete, fromIndex, toIndex);
@@ -387,7 +352,6 @@ function applyDeleteTag(board: Board, name: TagName): Result<Board, DomainError>
     ...board,
     tags: board.tags.filter((_, i) => i !== index),
     new: board.new.map(stripTag),
-    wip: board.wip.map(stripTag),
     complete: board.complete.map(stripTag),
     discarded: board.discarded.map(stripTag),
   });
@@ -406,8 +370,6 @@ function replaceLocatedTags(board: Board, located: Located, tags: readonly TagNa
   switch (located.section) {
     case 'new':
       return { ...board, new: replaceAt(board.new, located.index, { ...located.item, tags }) };
-    case 'wip':
-      return { ...board, wip: replaceAt(board.wip, located.index, { ...located.item, tags }) };
     case 'complete':
       return { ...board, complete: replaceAt(board.complete, located.index, { ...located.item, tags }) };
     case 'discarded':

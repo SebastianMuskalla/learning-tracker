@@ -2,7 +2,7 @@ import { err, ok, type Result } from '../domain/result';
 
 /** The format version that this app writes. See "Current format version" and "Upgrade older files" in
  *  openspec/specs/file-format/spec.md. */
-export const CURRENT_VERSION = 5;
+export const CURRENT_VERSION = 6;
 
 export type VersionError =
   | { readonly type: 'NoVersionMarker' }
